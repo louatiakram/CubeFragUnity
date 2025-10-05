@@ -73,6 +73,9 @@ public class FreeFallK4 : MonoBehaviour
         position += dt / 6f * (k1_p + 2f * k2_p + 2f * k3_p + k4_p);
         velocity += dt / 6f * (k1_v + 2f * k2_v + 2f * k3_v + k4_v);
     }
+        // Forces initiales
+          
+        
 
     // ----------- Acceleration function ------------
     Vector3 Acceleration(Vector3 pos, Vector3 vel)
