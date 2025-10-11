@@ -1,13 +1,14 @@
+// FragmentT.cs
 using UnityEngine;
 
-public class Fragment
+public class FragmentR
 {
     public RigidBody3DStateR state;
     public CubeObjectT meshData;
     public MeshFilter meshFilter;
     public Mesh mesh;
 
-    public Fragment(float mass, Vector3 pos, Matrix4x4 I, CubeObjectT meshData)
+    public FragmentR(float mass, Vector3 pos, Matrix4x4 I, CubeObjectT meshData)
     {
         this.state = new RigidBody3DStateR(mass, pos, Vector3.zero, Vector3.zero, I);
         this.meshData = meshData;
