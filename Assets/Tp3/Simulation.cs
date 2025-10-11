@@ -7,7 +7,7 @@ public class Simulation : MonoBehaviour
 
     // Physics parameters
     public float m1 = 1f;
-         public float m2 = 1f;
+    public float m2 = 1f;
     public float k1 = 20f;
     public float k2 = 20f;
     public float c1 = 1f;
@@ -21,6 +21,7 @@ public class Simulation : MonoBehaviour
     private Vector3 pos2;
     private Vector3 vel1; 
     private Vector3 vel2;
+
 
     void Start()
     {
