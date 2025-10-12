@@ -78,28 +78,38 @@ public class FractureSimulator : MonoBehaviour
 
     void SimulateStep()
     {
-        // 1) TEST DE FRACTURE GLOBALE À 0,0,0
-        if (!hasBroken
-            && Vector3.Distance(transform.position, Vector3.zero) < 0.001f)
+        // Détermine le centre du cube (fragment central)
+        Vector3 cubeCenter = fragments[fragments.Count / 2].state.position;
+
+        if (!hasBroken &&
+    Mathf.Abs(cubeCenter.x) < 0.01f &&
+    Mathf.Abs(cubeCenter.y) < 0.01f &&
+    Mathf.Abs(cubeCenter.z) < 0.01f)
         {
-            // On casse tout d’un coup
             foreach (var c in constraints)
                 c.isBroken = true;
             hasBroken = true;
+            for (int i = 0; i < fragments.Count; i++)
+            {
+                Vector3 randomImpulse = Random.onUnitSphere * 5f;
+                fragments[i].state.P += randomImpulse * fragments[i].state.mass;
+            }
+            gravity = Vector3.zero;  // Arrêter la gravité si souhaité
+                                     // NE PAS mettre dt=0, sinon simulation bloquée
         }
 
-        // 2) Reset forces/torques
+
+
+        // (le reste de la fonction ne change pas)
         Vector3[] forces = new Vector3[fragments.Count];
         Vector3[] torques = new Vector3[fragments.Count];
 
-        // 3) Appliquer la gravité
         for (int i = 0; i < fragments.Count; i++)
             forces[i] += gravity * fragments[i].state.mass;
 
-        // 4) Résolution des contraintes (simple impulse)
         foreach (var c in constraints)
         {
-            if (c.isBroken) continue;  // ← Ne plus traiter les contraintes déjà cassées
+            if (c.isBroken) continue;
             int i = c.a, j = c.b;
             Vector3 relPos = fragments[j].state.position - fragments[i].state.position;
             Vector3 dir = relPos.normalized;
@@ -111,7 +121,6 @@ public class FractureSimulator : MonoBehaviour
             float impulse = -(1f + 0.3f) * relVel
                             / (1 / fragments[i].state.mass + 1 / fragments[j].state.mass);
 
-            // fracture check local (optionnel, garde l’ancien seuil)
             if (Mathf.Abs(impulse) > fractureThreshold)
             {
                 c.isBroken = true;
@@ -121,21 +130,30 @@ public class FractureSimulator : MonoBehaviour
             fragments[j].state.P += dir * impulse;
         }
 
-        // 5) Purger toutes les contraintes cassées
         constraints.RemoveAll(c => c.isBroken);
 
-        // 6) Intégrer chaque fragment
         for (int i = 0; i < fragments.Count; i++)
             fragments[i].state.Integrate(forces[i], torques[i], dt);
-    }   
+        Vector3 centerPos = Vector3.zero;
+        for (int i = 0; i < fragments.Count; i++)
+            centerPos += fragments[i].state.position;
+        centerPos /= fragments.Count;
+        transform.position = centerPos;
+    }
+
 
     void UpdateMeshes()
     {
+        
+
         foreach (var frag in fragments)
         {
             frag.UpdateMesh();
+            // Synchronisation de la position Unity
+            frag.meshFilter.transform.localPosition = frag.state.position - transform.position;
         }
     }
+
 
 }
 
