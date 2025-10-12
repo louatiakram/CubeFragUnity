@@ -84,6 +84,43 @@ public struct Matrix4x4Manual
         return R;
     }
 
+    public static Matrix4x4Manual Add(Matrix4x4Manual A, Matrix4x4Manual B)
+    {
+        Matrix4x4Manual R = new Matrix4x4Manual();
+        R.m00 = A.m00 + B.m00; R.m01 = A.m01 + B.m01; R.m02 = A.m02 + B.m02; R.m03 = A.m03 + B.m03;
+        R.m10 = A.m10 + B.m10; R.m11 = A.m11 + B.m11; R.m12 = A.m12 + B.m12; R.m13 = A.m13 + B.m13;
+        R.m20 = A.m20 + B.m20; R.m21 = A.m21 + B.m21; R.m22 = A.m22 + B.m22; R.m23 = A.m23 + B.m23;
+        R.m30 = A.m30 + B.m30; R.m31 = A.m31 + B.m31; R.m32 = A.m32 + B.m32; R.m33 = A.m33 + B.m33;
+        return R;
+    }
+
+    public static Matrix4x4Manual MulScalar(Matrix4x4Manual M, float s)
+    {
+        Matrix4x4Manual R = new Matrix4x4Manual();
+        R.m00 = M.m00 * s; R.m01 = M.m01 * s; R.m02 = M.m02 * s; R.m03 = M.m03 * s;
+        R.m10 = M.m10 * s; R.m11 = M.m11 * s; R.m12 = M.m12 * s; R.m13 = M.m13 * s;
+        R.m20 = M.m20 * s; R.m21 = M.m21 * s; R.m22 = M.m22 * s; R.m23 = M.m23 * s;
+        R.m30 = M.m30 * s; R.m31 = M.m31 * s; R.m32 = M.m32 * s; R.m33 = M.m33 * s;
+        return R;
+    }
+
+    public static Matrix4x4Manual GramSchmidt(Matrix4x4Manual M)
+    {
+        Vector3 x = new Vector3(M.m00, M.m10, M.m20);
+        Vector3 y = new Vector3(M.m01, M.m11, M.m21);
+        Vector3 z = new Vector3(M.m02, M.m12, M.m22);
+
+        x = x.normalized;
+        y = (y - Vector3.Dot(y, x) * x).normalized;
+        z = Vector3.Cross(x, y);
+
+        Matrix4x4Manual result = Identity();
+        result.m00 = x.x; result.m10 = x.y; result.m20 = x.z;
+        result.m01 = y.x; result.m11 = y.y; result.m21 = y.z;
+        result.m02 = z.x; result.m12 = z.y; result.m22 = z.z;
+
+        return result;
+    }
     // Convert to Unity's position / quaternion (extract translation + rotation)
     public Vector3 ExtractTranslation() => new Vector3(m03, m13, m23);
     public Quaternion ExtractRotation()

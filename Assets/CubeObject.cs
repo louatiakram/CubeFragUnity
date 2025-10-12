@@ -1,13 +1,21 @@
 using UnityEngine;
 
-public class CubeObjectT
+public class CubeObject
 {
     public Vector3[] vertices;
     public int[] triangles;
     public Color color;
 
-    public CubeObjectT(float a, float b, float c, Color cubeColor)
+    public float sizeX { get; private set; }
+    public float sizeY { get; private set; }
+    public float sizeZ { get; private set; }
+
+    public CubeObject(float a, float b, float c, Color cubeColor)
     {
+        sizeX = a;
+        sizeY = b;
+        sizeZ = c;
+
         color = cubeColor;
         vertices = new Vector3[8];
         float hx = a / 2, hy = b / 2, hz = c / 2;
