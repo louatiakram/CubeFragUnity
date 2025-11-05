@@ -364,9 +364,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   positionCubeGauche: {x: -6, y: 0, z: 0}
-  positionCubeDroit: {x: 6, y: 0, z: 0}
+  positionCubeDroit: {x: 6, y: 0, z: 1}
   positionRectGauche: {x: -2, y: 0, z: 0}
-  positionRectDroit: {x: 3, y: 0, z: 0}
+  positionRectDroit: {x: 2, y: 0, z: 1}
   tailleCube: 0.7
   tailleRectangle: {x: 4.5, y: 1, z: 0.5}
   rempartObjects: []
@@ -402,7 +402,7 @@ MonoBehaviour:
   vitesse: 20
   "rayonSph\xE8re": 0.2
   couleurRayon: {r: 0, g: 0.9804158, b: 1, a: 1}
-  intensiteImpulsion: 15
+  intensiteImpulsion: 60
   gestionnaireRempart: {fileID: 1229638694}
 --- !u!114 &1229638697
 MonoBehaviour:
