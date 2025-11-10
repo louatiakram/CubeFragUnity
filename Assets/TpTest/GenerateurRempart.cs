@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 public class GenerateurRempart : MonoBehaviour
 {
-    // Positions modifiables dans l'inspecteur
+    // Positions modifiables dans l'inspecteur (Unity Vector3 pour l'inspector)
     public Vector3 positionCubeGauche = new Vector3(-5f, 0f, 0f);
     public Vector3 positionCubeDroit = new Vector3(5f, 0f, 0f);
     public Vector3 positionRectGauche = new Vector3(-2f, 0f, 0f);
@@ -15,35 +15,63 @@ public class GenerateurRempart : MonoBehaviour
 
     void Start()
     {
-        GameObject cubeGauche = CreerObjet(positionCubeGauche, new Vector3(tailleCube, tailleCube, tailleCube), "CubeGauche", Color.blue);
-        GameObject cubeDroit = CreerObjet(positionCubeDroit, new Vector3(tailleCube, tailleCube, tailleCube), "CubeDroit", Color.red);
-        GameObject rectGauche = CreerObjet(positionRectGauche, tailleRectangle, "RectGauche", Color.green);
-        GameObject rectDroit = CreerObjet(positionRectDroit, tailleRectangle, "RectDroit", Color.yellow);
+        CreerObjet(positionCubeGauche, new Vector3(tailleCube, tailleCube, tailleCube), "CubeGauche", Color.blue);
+        CreerObjet(positionCubeDroit, new Vector3(tailleCube, tailleCube, tailleCube), "CubeDroit", Color.red);
+        CreerObjet(positionRectGauche, tailleRectangle, "RectGauche", Color.green);
+        CreerObjet(positionRectDroit, tailleRectangle, "RectDroit", Color.yellow);
     }
 
-    GameObject CreerObjet(Vector3 position, Vector3 taille, string nom, Color couleur)
+    void CreerObjet(Vector3 position, Vector3 taille, string nom, Color couleur)
     {
-        // EmpÍche chevauchement
+        // Convertir en types custom
+        MyVector3 posCustom = MyVector3.FromUnity(position);
+        MyVector3 tailleCustom = MyVector3.FromUnity(taille);
+
+        // V√©rifier chevauchement avec OBB
         foreach (var go in rempartObjects)
         {
             RempartPhysique phys = go.GetComponent<RempartPhysique>();
-            if (phys != null && RempartPhysique.CheckAABBCollision(position, taille, go.transform.position, phys.size))
+            if (phys != null)
             {
-                Debug.LogWarning($"Chevauchement dÈtectÈ, {nom} non crÈÈ.");
-                return null;
+                // Cr√©er transform temporaire pour v√©rification
+                GameObject temp = new GameObject();
+                temp.transform.position = position;
+
+                // Obtenir la taille de l'objet existant depuis son inspector
+                Vector3 existingSize = phys.sizeUnity;
+                MyVector3 existingSizeCustom = MyVector3.FromUnity(existingSize);
+
+                OBBCollisionInfo info = OBBCollision.CheckOBBCollision(
+                    temp.transform, tailleCustom,
+                    go.transform, existingSizeCustom
+                );
+
+                Destroy(temp);
+
+                if (info.isColliding)
+                {
+                    Debug.LogWarning($"Chevauchement d√©tect√©, {nom} non cr√©√©.");
+                    return;
+                }
             }
         }
+
+        // Cr√©er l'objet
         GameObject goNew = new GameObject(nom);
         goNew.transform.position = position;
+
         MeshFilter mf = goNew.AddComponent<MeshFilter>();
         MeshRenderer mr = goNew.AddComponent<MeshRenderer>();
+
         CubeObject obj = new CubeObject(taille.x, taille.y, taille.z, couleur);
         mf.mesh = MeshUtils.CreateMeshFromCubeObject(obj);
+
         mr.material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         mr.material.color = couleur;
+
         RempartPhysique rp = goNew.AddComponent<RempartPhysique>();
-        rp.size = taille;
+        rp.sizeUnity = taille; // Visible dans l'inspector
+
         rempartObjects.Add(goNew);
-        return goNew;
     }
 }
