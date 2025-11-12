@@ -247,7 +247,6 @@ public class FallingFragmentingCube : MonoBehaviour
         );
     }
 }
-
 public class FragmentCube
 {
     public CubeObject cube;
@@ -284,10 +283,11 @@ public class FragmentCube
 
         momentOfInertia = (1f / 6f) * mass * size * size;
 
+        // Small initial spin
         angularVelocity = new Vector3(
-            Random.Range(-3f, 3f),
-            Random.Range(-3f, 3f),
-            Random.Range(-3f, 3f)
+            Random.Range(-1.5f, 1.5f),
+            Random.Range(-1.5f, 1.5f),
+            Random.Range(-1.5f, 1.5f)
         );
     }
 
@@ -298,152 +298,98 @@ public class FragmentCube
         // Apply gravity
         velocity += gravity * dt;
 
-        // Air resistance
-        float dragCoefficient = 0.03f;
-        Vector3 dragForce = -velocity.normalized * velocity.sqrMagnitude * dragCoefficient;
-        velocity += dragForce * dt;
+        // Air drag (stronger)
+        float airDrag = 0.2f;
+        velocity -= velocity * airDrag * dt;
 
-        // Update position
+        // Move
         position += velocity * dt;
 
-        // Get all 8 vertices in world space
+        // Compute vertices
         Vector3[] worldVertices = new Vector3[8];
         for (int i = 0; i < 8; i++)
-        {
             worldVertices[i] = Math3D.MultiplyMatrixVector3(rotation, cube.vertices[i]) + position;
-        }
 
-        // Find lowest vertex
+        // Lowest vertex
         float lowestY = float.MaxValue;
-        int lowestVertexIndex = -1;
-
+        int lowestIdx = -1;
         for (int i = 0; i < 8; i++)
         {
             if (worldVertices[i].y < lowestY)
             {
                 lowestY = worldVertices[i].y;
-                lowestVertexIndex = i;
+                lowestIdx = i;
             }
         }
 
-        // Ground collision
         if (lowestY <= groundY + 0.01f)
         {
             isGrounded = true;
             groundContactFrames++;
 
-            // Correct position
             float penetration = groundY - lowestY;
             position.y += penetration;
 
-            // Recalculate vertices after correction
-            for (int i = 0; i < 8; i++)
-            {
-                worldVertices[i] = Math3D.MultiplyMatrixVector3(rotation, cube.vertices[i]) + position;
-            }
-
-            // Contact point
-            Vector3 contactPoint = worldVertices[lowestVertexIndex];
+            // Contact
+            Vector3 contactPoint = worldVertices[lowestIdx];
             contactPoint.y = groundY;
             groundContactPoint = contactPoint;
-            
             Vector3 r = contactPoint - position;
 
-            // Velocity at contact point
+            // Velocity at contact
             Vector3 vContact = velocity + Vector3.Cross(angularVelocity, r);
-
             float vNormal = vContact.y;
-            Vector3 vTangent = new Vector3(vContact.x, 0, vContact.z);
 
-            // VERTICAL BOUNCE
-            if (vNormal < -0.02f)
+            // Bounce (heavily damped)
+            if (vNormal < -0.05f)
             {
-                float kineticEnergy = 0.5f * mass * vNormal * vNormal;
-                float energyAfter = kineticEnergy * (1f - energyLossPerBounce);
-                float vNormalAfter = -Mathf.Sqrt(2f * energyAfter / mass) * bounciness;
-
-                float deltaV = vNormalAfter - vNormal;
-                velocity.y += deltaV;
-
-                float impulseMagnitude = mass * Mathf.Abs(deltaV);
-                Vector3 impulse = new Vector3(0, impulseMagnitude, 0);
-                Vector3 torque = Vector3.Cross(r, impulse);
-                angularVelocity += torque / momentOfInertia * 0.4f;
-
+                velocity.y = -vNormal * bounciness * 0.3f; // strong damping
                 angularVelocity *= 0.6f;
             }
-            else if (vNormal < 0)
+            else
             {
-                velocity.y = 0;
+                velocity.y = 0f;
             }
 
-            // HORIZONTAL FRICTION
-            float tangentSpeed = vTangent.magnitude;
-            if (tangentSpeed > 0.01f)
+            // Friction (strong horizontal slowdown)
+            Vector3 vTangent = new Vector3(vContact.x, 0, vContact.z);
+            if (vTangent.magnitude > 0.01f)
             {
-                float normalForce = mass * Mathf.Abs(gravity.y);
-                float frictionForce = normalForce * 0.8f;
-                float maxDecel = frictionForce / mass;
-                float deceleration = Mathf.Min(maxDecel, tangentSpeed / dt);
-
-                Vector3 frictionAccel = -vTangent.normalized * deceleration;
-                velocity += frictionAccel * dt;
-
-                Vector3 frictionTorque = Vector3.Cross(r, -vTangent.normalized * frictionForce);
-                angularVelocity += frictionTorque / momentOfInertia * dt;
+                float friction = 10f; // super strong ground friction
+                velocity -= vTangent.normalized * friction * dt;
+                angularVelocity *= 0.8f;
             }
 
-            // COUNT VERTICES ON GROUND FIRST
+            // Count vertices on ground
             int verticesOnGround = 0;
             for (int i = 0; i < 8; i++)
-            {
                 if (worldVertices[i].y <= groundY + 0.2f)
                     verticesOnGround++;
-            }
 
-            // GRAVITATIONAL TORQUE - very strong to force toppling
-            float distanceFromCenter = r.magnitude;
-            if (distanceFromCenter > size * 0.2f && verticesOnGround < 3)
-            {
-                Vector3 gravityForce = gravity * mass;
-                Vector3 gravityTorque = Vector3.Cross(r, gravityForce);
-                angularVelocity += gravityTorque / momentOfInertia * dt * 25f;
-            }
+            // Damping for motion & spin
+            velocity *= 0.8f;
+            angularVelocity *= 0.7f;
 
-            // INSTABILITY PERTURBATION
-            if (verticesOnGround < 3 && groundContactFrames > 3)
-            {
-                angularVelocity += new Vector3(
-                    Random.Range(-1f, 1f),
-                    0,
-                    Random.Range(-1f, 1f)
-                );
-            }
-
-            // Ground damping
-            velocity *= 0.75f;
-            angularVelocity *= 0.70f;
-
-            // REST DETECTION
+            // Rest detection
             bool hasStableBase = verticesOnGround >= 3;
-            bool movingSlowly = velocity.magnitude < 0.2f;
-            bool rotatingSlowly = angularVelocity.magnitude < 0.4f;
+            bool movingSlowly = velocity.magnitude < 0.05f;
+            bool rotatingSlowly = angularVelocity.magnitude < 0.1f;
 
             if (hasStableBase && movingSlowly && rotatingSlowly)
             {
                 restTimer += dt;
-
-                if (restTimer > 0.2f || groundContactFrames > 20)
+                if (restTimer > 0.25f)
                 {
                     velocity = Vector3.zero;
                     angularVelocity = Vector3.zero;
                     isAtRest = true;
                     position.y = groundY + size / 2f;
+                    rotation = Matrix4x4.identity;
                 }
             }
             else
             {
-                restTimer *= 0.8f;
+                restTimer = 0f;
             }
         }
         else
@@ -453,18 +399,31 @@ public class FragmentCube
             restTimer = 0f;
         }
 
+        // Final rotation and angular damping
         if (!isAtRest)
         {
-            UpdateRotation(dt);
-            float angularDrag = 0.01f;
-            angularVelocity -= angularVelocity.normalized * angularVelocity.sqrMagnitude * angularDrag * dt;
+            if (angularVelocity.magnitude > 0.02f)
+            {
+                UpdateRotation(dt);
+            }
+            else
+            {
+                angularVelocity = Vector3.zero;
+            }
+
+            // Exponential angular damping
+            float angularDrag = 6f; // very strong
+            angularVelocity *= Mathf.Exp(-angularDrag * dt);
+
+            // Hard clamp to kill infinite spin
+            if (angularVelocity.magnitude < 0.02f)
+                angularVelocity = Vector3.zero;
         }
     }
 
     void UpdateRotation(float dt)
     {
         Matrix4x4 Omega = Matrix4x4.zero;
-
         Omega[0, 1] = -angularVelocity.z; Omega[0, 2] = angularVelocity.y;
         Omega[1, 0] = angularVelocity.z; Omega[1, 2] = -angularVelocity.x;
         Omega[2, 0] = -angularVelocity.y; Omega[2, 1] = angularVelocity.x;
@@ -480,9 +439,7 @@ public class FragmentCube
 
         Vector3[] transformedVertices = new Vector3[8];
         for (int i = 0; i < 8; i++)
-        {
             transformedVertices[i] = Math3D.MultiplyMatrixVector3(rotation, cube.vertices[i]) + position;
-        }
 
         mesh.Clear();
         mesh.vertices = transformedVertices;
@@ -490,3 +447,5 @@ public class FragmentCube
         mesh.RecalculateNormals();
     }
 }
+
+
