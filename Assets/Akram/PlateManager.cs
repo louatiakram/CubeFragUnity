@@ -26,7 +26,6 @@ public class PlateManager : MonoBehaviour
     [Header("=== Fracture Physics ===")]
     [Tooltip("Radius around impact point that affects fragments (in world units)")]
     [Range(1f, 10f)] public float impactRadius = 3f;
-
     [Tooltip("Base impulse strength on fracture")]
     [Range(5f, 25f)] public float impulseStrength = 12f;
 
@@ -98,7 +97,6 @@ public class PlateManager : MonoBehaviour
 
         var mf = intactPlate.AddComponent<MeshFilter>();
         var mr = intactPlate.AddComponent<MeshRenderer>();
-
         mf.sharedMesh = plateGeometry.CreatePlateMesh();
         mr.sharedMaterial = hostMR.sharedMaterial ?? new Material(Shader.Find("Standard"));
     }
@@ -115,22 +113,22 @@ public class PlateManager : MonoBehaviour
         // Physics update
         platePhysics.UpdateIntact(Time.deltaTime);
 
-        // Visual update with alpha-based pre-fracture effect
+        // Visual update
         intactPlate.transform.position = platePhysics.Position;
         intactPlate.transform.rotation = Quaternion.identity;
 
-        // Apply visual defragmentation (aesthetic only)
+        // Aesthetic pre-fracture "defragmentation"
         ApplyVisualDefragmentation();
 
         // Collision detection using bounding sphere
         float plateRadius = 0.5f * Mathf.Sqrt(plateWidth * plateWidth + plateDepth * plateDepth);
-        Vector3 normal, hitPoint;
-
+        Vector3 normal, hitPoint, closestPoint;
         if (collisionDetector.CheckSphereCollision(
             platePhysics.Position,
             plateRadius,
             out normal,
-            out hitPoint))
+            out hitPoint,
+            out closestPoint))
         {
             FracturePlate(hitPoint, normal);
         }
@@ -144,6 +142,7 @@ public class PlateManager : MonoBehaviour
         }
     }
 
+    // --- FIX: no vertical jitter (XZ-only) so pieces don't hover pre-fracture ---
     void ApplyVisualDefragmentation()
     {
         float radialOffset = 0.25f * alpha;
@@ -157,7 +156,9 @@ public class PlateManager : MonoBehaviour
                 piece.LocalCenter.z / (plateDepth * 0.5f + 1e-6f)
             );
 
-            Vector3 offset = outward * radialOffset + Random.insideUnitSphere * jitterAmount;
+            // XZ-only jitter
+            Vector2 jitter2 = Random.insideUnitCircle * jitterAmount;
+            Vector3 offset = outward * radialOffset + new Vector3(jitter2.x, 0f, jitter2.y);
 
             piece.transform.position = platePhysics.Position + piece.LocalCenter + offset;
             piece.transform.rotation = Quaternion.Euler(0f, (Random.value - 0.5f) * 20f * alpha, 0f);

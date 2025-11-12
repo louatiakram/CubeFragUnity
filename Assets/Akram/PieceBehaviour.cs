@@ -8,6 +8,7 @@ public class PieceBehaviour : MonoBehaviour
     private Vector3 localCenter;
     private float mass;
     private float boundingRadius;
+    private float halfHeight; // world half-height (for flush vertical placement)
 
     // Physics state
     private Vector3 position;
@@ -19,11 +20,12 @@ public class PieceBehaviour : MonoBehaviour
 
     // Physics constants
     private const float RESTITUTION = 0.05f;
-    private const float FRICTION = 0.92f; // Increased for more stable resting
+    private const float FRICTION = 0.92f;       // Increased for more stable resting
     private const float TIME_STEP = 1f / 60f;
     private const int FRACTURE_GRACE_FRAMES = 3;
     private const float REST_THRESHOLD = 0.1f; // Speed below which fragment can rest
-    private const float SLEEP_THRESHOLD = 0.05f; // Very low speed = sleeping
+    private const float SLEEP_THRESHOLD = 0.05f;// Very low speed = sleeping
+
     private float timeAccumulator = 0f;
 
     public Vector3 LocalCenter => localCenter;
@@ -33,6 +35,9 @@ public class PieceBehaviour : MonoBehaviour
         localCenter = center;
         mass = Mathf.Max(m, 0.01f);
         boundingRadius = radius;
+
+        // Capture world-space half-height based on current scaling (the cube height equals thickness)
+        halfHeight = 0.5f * transform.lossyScale.y;
     }
 
     /// Initialize physics state after fracture
@@ -40,6 +45,7 @@ public class PieceBehaviour : MonoBehaviour
     {
         position = startPos;
         velocity = startVel;
+
         isInitialized = true;
         justFractured = true;
         fractureFrameCount = 0;
@@ -116,8 +122,8 @@ public class PieceBehaviour : MonoBehaviour
         if (isResting && velocity.sqrMagnitude < SLEEP_THRESHOLD * SLEEP_THRESHOLD)
         {
             // Just check if still supported, otherwise wake up
-            Vector3 testNormal, testHit;
-            if (!collisionDetector.CheckSphereCollision(position, boundingRadius, out testNormal, out testHit))
+            Vector3 testNormal, testHit, testClosest;
+            if (!collisionDetector.CheckSphereCollision(position, boundingRadius, out testNormal, out testHit, out testClosest))
             {
                 // No longer on surface, wake up
                 isResting = false;
@@ -153,13 +159,12 @@ public class PieceBehaviour : MonoBehaviour
         // Collision detection and response (skip immediately after fracture)
         if (!justFractured)
         {
-            Vector3 normal, hitPoint;
-
+            Vector3 normal, hitPoint, closestPoint;
             // Check collision at next position
-            if (collisionDetector.CheckSphereCollision(nextPos, boundingRadius, out normal, out hitPoint))
+            if (collisionDetector.CheckSphereCollision(nextPos, boundingRadius, out normal, out hitPoint, out closestPoint))
             {
                 // Collision detected - resolve it
-                ResolveCollision(ref nextPos, normal, hitPoint, dt, gravity, collisionDetector);
+                ResolveCollision(ref nextPos, normal, hitPoint, closestPoint, dt, gravity, collisionDetector);
             }
             else
             {
@@ -171,54 +176,58 @@ public class PieceBehaviour : MonoBehaviour
         position = nextPos;
     }
 
-    void ResolveCollision(ref Vector3 nextPos, Vector3 normal, Vector3 hitPoint, float dt, float gravity, CollisionDetector collisionDetector)
+    void ResolveCollision(ref Vector3 nextPos, Vector3 normal, Vector3 hitPoint, Vector3 closestPoint, float dt, float gravity, CollisionDetector collisionDetector)
     {
-        // Project position out of obstacle
-        Vector3 penetration = nextPos - hitPoint;
-        float penetrationDepth = Vector3.Dot(penetration, normal);
+        // --- Geometric snap for horizontal surfaces (eliminate hover gap) ---
+        float upDot = Vector3.Dot(normal, Vector3.up);
+        const float EPS = 0.0005f; // small epsilon to avoid z-fighting/sinking
+        bool usedFlatSnap = false;
 
-        if (penetrationDepth < 0f)
+        if (upDot > 0.7f)
         {
-            // Push fragment out of obstacle
-            nextPos -= normal * penetrationDepth;
-            nextPos += normal * 0.001f; // Small safety margin to prevent sinking
+            // Resting on top of a surface (floor-like): force exact flush
+            float targetY = closestPoint.y + halfHeight + EPS;
+            nextPos.y = targetY;
+            usedFlatSnap = true;
+
+            // Remove all normal component of velocity (both up & down)
+            float vn = Vector3.Dot(velocity, normal);
+            velocity -= vn * normal;
+        }
+        else if (upDot < -0.7f)
+        {
+            // Pressed against a ceiling: force exact flush
+            float targetY = closestPoint.y - halfHeight - EPS;
+            nextPos.y = targetY;
+            usedFlatSnap = true;
+
+            // Remove all normal component of velocity
+            float vn = Vector3.Dot(velocity, normal);
+            velocity -= vn * normal;
+        }
+        else
+        {
+            // For walls / steep surfaces, fall back to sphere-based pushout
+            Vector3 penetration = nextPos - hitPoint;
+            float penetrationDepth = Vector3.Dot(penetration, normal);
+            if (penetrationDepth < 0f)
+            {
+                nextPos -= normal * penetrationDepth;
+                nextPos += normal * 0.001f; // safety margin
+            }
         }
 
-        // Calculate relative velocity along normal
+        // Normal velocity response (for non-snapped cases); keep as-is
         float normalVelocity = Vector3.Dot(velocity, normal);
-
-        // Only resolve if moving into surface
-        if (normalVelocity < 0f)
+        if (!usedFlatSnap && normalVelocity < 0f)
         {
             // Remove normal component with restitution (bounce)
             velocity -= (1f + RESTITUTION) * normalVelocity * normal;
-
-            // Check if fragment should rest
-            // If moving slowly downward onto a horizontal-ish surface, allow resting
-            float speed = velocity.magnitude;
-            bool isHorizontalSurface = Vector3.Dot(normal, Vector3.up) > 0.7f;
-
-            if (speed < REST_THRESHOLD && isHorizontalSurface)
-            {
-                // Fragment is moving slowly onto a flat surface - let it rest
-                isResting = true;
-
-                // Dampen velocity heavily to settle
-                velocity *= 0.1f;
-
-                // Remove any remaining downward velocity
-                float downVel = Vector3.Dot(velocity, Vector3.down);
-                if (downVel > 0f)
-                {
-                    velocity -= Vector3.down * downVel;
-                }
-            }
         }
 
         // Apply kinetic friction to tangential velocity
         Vector3 tangentVelocity = velocity - Vector3.Dot(velocity, normal) * normal;
         float tangentSpeed = tangentVelocity.magnitude;
-
         if (tangentSpeed > 0.001f)
         {
             // Dynamic friction
@@ -227,34 +236,59 @@ public class PieceBehaviour : MonoBehaviour
             velocity -= frictionDirection * frictionMagnitude;
         }
 
-        // Only apply surface gravity if not resting
-        if (!isResting)
+        // Resting logic: for horizontal surfaces, determine sleep based on tangent speed
+        if (usedFlatSnap && upDot > 0.7f)
         {
-            // Project gravity along surface tangent for realistic sliding
-            Vector3 gravityVector = Vector3.down * gravity;
-            Vector3 tangentGravity = gravityVector - normal * Vector3.Dot(gravityVector, normal);
-            velocity += tangentGravity * dt;
+            if (tangentSpeed < REST_THRESHOLD)
+            {
+                isResting = true;
+                velocity = Vector3.zero; // settle
+            }
+        }
+        else
+        {
+            // Only apply surface gravity if not resting
+            if (!isResting)
+            {
+                // Project gravity along surface tangent for realistic sliding
+                Vector3 gravityVector = Vector3.down * gravity;
+                Vector3 tangentGravity = gravityVector - normal * Vector3.Dot(gravityVector, normal);
+                velocity += tangentGravity * dt;
+            }
+
+            // If moving slowly onto a flat surface (non-snap path) allow resting
+            if (upDot > 0.7f && velocity.magnitude < REST_THRESHOLD)
+            {
+                isResting = true;
+                // Dampen and remove residual downward velocity
+                velocity *= 0.1f;
+                float downVel = Vector3.Dot(velocity, Vector3.down);
+                if (downVel > 0f) velocity -= Vector3.down * downVel;
+            }
         }
 
-        // Additional check: iterative pushout if still penetrating
-        Vector3 testNormal, testHit;
-        int iterations = 0;
-        while (iterations < 5 && collisionDetector.CheckSphereCollision(nextPos, boundingRadius, out testNormal, out testHit))
+        // Additional check: iterative pushout if still penetrating.
+        // IMPORTANT: Skip this when we used the flat snap, otherwise the sphere-based pushout
+        // will lift the piece back up to the sphere height (creating the gap again).
+        if (!usedFlatSnap)
         {
-            Vector3 testPenetration = nextPos - testHit;
-            float testDepth = Vector3.Dot(testPenetration, testNormal);
-
-            if (testDepth < 0f)
+            Vector3 testNormal, testHit, testClosest;
+            int iterations = 0;
+            while (iterations < 5 && collisionDetector.CheckSphereCollision(nextPos, boundingRadius, out testNormal, out testHit, out testClosest))
             {
-                nextPos -= testNormal * testDepth;
-                nextPos += testNormal * 0.001f;
+                Vector3 testPenetration = nextPos - testHit;
+                float testDepth = Vector3.Dot(testPenetration, testNormal);
+                if (testDepth < 0f)
+                {
+                    nextPos -= testNormal * testDepth;
+                    nextPos += testNormal * 0.001f;
+                }
+                else
+                {
+                    break;
+                }
+                iterations++;
             }
-            else
-            {
-                break;
-            }
-
-            iterations++;
         }
     }
 }
