@@ -471,37 +471,53 @@ public class ChainPhysicsSystem : MonoBehaviour
         if (!showDebugInfo) return;
 
         GUIStyle style = new GUIStyle();
-        style.fontSize = 14;
+        style.fontSize = 24; // Increased from 13
+        style.fontStyle = FontStyle.Bold; // Made bold
         style.normal.textColor = Color.white;
 
-        GUI.Label(new Rect(10, 10, 700, 30), "=== ENERGIZED RIGID BODY FRACTURE (Paper Implementation) ===", style);
-        GUI.Label(new Rect(10, 35, 700, 25), "Arrow Keys: Move anchor | WASD: Pull weight | SPACE: Manual detach | R: Reset", style);
+        // Calculate current values
+        float maxStretch = 0f;
+        float maxForce = 0f;
 
-        GUI.Label(new Rect(10, 70, 700, 25), $"Cube Attached: {bottomCubeAttached}", style);
-
-        if (bottomCubeAttached)
+        if (bottomCubeAttached && constraints.Count > 0)
         {
-            float maxStretch = 0f;
             foreach (var c in constraints)
             {
-                float stretch = (c.linkB.position - c.linkA.position).Magnitude() - c.restLength;
-                maxStretch = Mathf.Max(maxStretch, stretch / c.restLength);
+                float currentLength = (c.linkB.position - c.linkA.position).Magnitude();
+                float stretch = (currentLength - c.restLength) / c.restLength;
+                maxStretch = Mathf.Max(maxStretch, stretch);
+
+                // Calculate constraint force approximation
+                float stretchAbs = currentLength - c.restLength;
+                float force = constraintStiffness * stretchAbs;
+                maxForce = Mathf.Max(maxForce, Mathf.Abs(force));
             }
-
-            GUI.Label(new Rect(10, 95, 700, 25),
-                $"Max Stretch: {maxStretch * 100:F1}% / {maxStretchBeforeDetach * 100:F0}% (detach threshold)", style);
-
-            float energyNow = CalculateStoredEnergy();
-            GUI.Label(new Rect(10, 120, 700, 25), $"Stored Energy: {energyNow:F2} J", style);
-        }
-        else
-        {
-            GUI.Label(new Rect(10, 95, 700, 25),
-                $"DETACHED! Cube velocity: {bottomCubeVelocity.Magnitude():F2} m/s", style);
         }
 
-        // Show paper parameters
-        GUI.Label(new Rect(10, 155, 700, 25),
-            $"Paper Parameters: alpha={alpha:F2}, K={constraintStiffness:F0}, B={constraintDamping:F0}", style);
+        float currentEnergy = bottomCubeAttached ? CalculateStoredEnergy() : 0f;
+
+        // Display parameters
+        int y = 15;
+        int lineHeight = 30; // Increased spacing
+
+        GUI.Label(new Rect(15, y, 500, lineHeight), $"Alpha (energy transfer): {alpha:F2}", style);
+        y += lineHeight;
+
+        GUI.Label(new Rect(15, y, 500, lineHeight), $"K (stiffness): {constraintStiffness:F0} N/m", style);
+        y += lineHeight;
+
+        GUI.Label(new Rect(15, y, 500, lineHeight), $"Max constraint force: {maxForce:F1} N", style);
+        y += lineHeight;
+
+        GUI.Label(new Rect(15, y, 500, lineHeight), $"Stretch: {maxStretch * 100:F1}% / {maxStretchBeforeDetach * 100:F0}%", style);
+        y += lineHeight;
+
+        GUI.Label(new Rect(15, y, 500, lineHeight), $"Stored energy: {currentEnergy:F2} J", style);
+        y += lineHeight;
+
+        y += 10;
+        GUI.Label(new Rect(15, y, 500, lineHeight), $"Status: {(bottomCubeAttached ? "Attached" : "Detached")}", style);
     }
+
+
 }
