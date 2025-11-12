@@ -209,6 +209,17 @@ namespace YassineBM
             GUI.Label(new Rect(10, 30, 400, 30), $"Total Fragments: {totalFragments}", style);
             GUI.Label(new Rect(10, 50, 400, 30), $"Gravity: {gravity} m/s²", style);
             GUI.Label(new Rect(10, 70, 400, 30), $"Collisions: {(enableFragmentCollisions ? "Enabled" : "Disabled")}", style);
+            GUI.Label(new Rect(10, 90, 400, 30), $"Restitution: {restitution:F2} ({GetRestitutionDescription()})", style);
+            GUI.Label(new Rect(10, 110, 400, 30), $"Fragment Mass: {fragmentMass:F2} kg", style);
+        }
+        
+        private string GetRestitutionDescription()
+        {
+            if (restitution >= 0.95f) return "Perfect Bounce";
+            if (restitution >= 0.7f) return "High Bounce";
+            if (restitution >= 0.4f) return "Medium Bounce";
+            if (restitution >= 0.15f) return "Low Bounce";
+            return "No Bounce";
         }
 
         /// <summary>
