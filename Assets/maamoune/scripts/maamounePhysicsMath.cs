@@ -1,7 +1,6 @@
 using UnityEngine;
 using System;
 
-// Custom 3D Vector - NO Unity Vector3
 [System.Serializable]
 public struct Vec3
 {
@@ -70,7 +69,6 @@ public struct Vec3
     public static Vec3 Up => new Vec3(0, 1, 0);
     public static Vec3 Down => new Vec3(0, -1, 0);
 
-    // Convert to Unity Vector3 for Debug.DrawLine
     public Vector3 ToUnityVec3()
     {
         return new Vector3(x, y, z);
@@ -87,11 +85,10 @@ public struct Vec3
     }
 }
 
-// Custom 4x4 Matrix - NO Unity Matrix4x4
 [System.Serializable]
 public struct Mat4
 {
-    public float[,] m; // 4x4 array
+    public float[,] m; 
 
     public Mat4(bool identity)
     {
@@ -108,7 +105,6 @@ public struct Mat4
         return new Mat4(true);
     }
 
-    // Translation matrix
     public static Mat4 Translate(Vec3 translation)
     {
         Mat4 mat = Identity();
@@ -118,7 +114,6 @@ public struct Mat4
         return mat;
     }
 
-    // Rotation matrix around axis (axis-angle representation)
     public static Mat4 Rotate(Vec3 axis, float angleRadians)
     {
         Mat4 mat = Identity();
@@ -142,7 +137,6 @@ public struct Mat4
         return mat;
     }
 
-    // Matrix multiplication
     public static Mat4 operator *(Mat4 a, Mat4 b)
     {
         Mat4 result = new Mat4(false);
@@ -160,7 +154,6 @@ public struct Mat4
         return result;
     }
 
-    // Transform a point (homogeneous coordinates)
     public Vec3 TransformPoint(Vec3 point)
     {
         float w = m[3, 0] * point.x + m[3, 1] * point.y + m[3, 2] * point.z + m[3, 3];

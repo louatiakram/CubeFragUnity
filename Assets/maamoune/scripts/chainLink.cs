@@ -1,6 +1,5 @@
 using UnityEngine;
 
-// Chain Link (Fragment/Rigid Body)
 [System.Serializable]
 public class ChainLink
 {
@@ -23,7 +22,6 @@ public class ChainLink
         mass = linkMass;
         size = linkSize;
 
-        // Inertia for cube: I = (1/6) * m * size^2
         inertia = (1.0f / 6.0f) * mass * size * size;
 
         force = Vec3.Zero;
@@ -46,19 +44,15 @@ public class ChainLink
         torque = torque + t;
     }
 
-    // Apply impulse at center of mass
     public void ApplyImpulse(Vec3 impulse)
     {
         velocity = velocity + (impulse / mass);
     }
 
-    // Apply impulse at a point (creates torque)
     public void ApplyImpulseAtPoint(Vec3 impulse, Vec3 point)
     {
-        // Linear component
         velocity = velocity + (impulse / mass);
 
-        // Angular component
         Vec3 r = point - position;
         Vec3 angularImpulse = Vec3.Cross(r, impulse);
         angularVelocity = angularVelocity + (angularImpulse / inertia);

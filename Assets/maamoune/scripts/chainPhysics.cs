@@ -84,7 +84,6 @@ public class ChainPhysicsSystem : MonoBehaviour
             Destroy(bottomCube.GetComponent<Collider>());
         }
 
-        // Create chain links
         for (int i = 0; i < numberOfLinks; i++)
         {
             float yPos = chainStartHeight - (i * linkSpacing);
@@ -93,15 +92,14 @@ public class ChainPhysicsSystem : MonoBehaviour
             links.Add(link);
         }
 
-        // Create RIGID constraints (unbreakable)
         for (int i = 0; i < links.Count - 1; i++)
         {
             ChainConstraint constraint = new ChainConstraint(
                 links[i],
                 links[i + 1],
-                constraintStiffness, // K from paper
-                constraintDamping,   // B from paper
-                float.MaxValue       // Chain never breaks
+                constraintStiffness, 
+                constraintDamping,   
+                float.MaxValue       
             );
             constraint.energyTransfer = alpha;
             constraint.broken = false;
@@ -130,33 +128,27 @@ public class ChainPhysicsSystem : MonoBehaviour
 
     void PhysicsStep(float dt)
     {
-        // 1. Lock top link
         LockTopLink();
 
-        // 2. Lock bottom link if attached
         if (bottomCubeAttached)
         {
             LockBottomLink();
-            CheckForAutoDetach(); // Check if should detach
+            CheckForAutoDetach(); 
         }
         else
         {
-            // Update free-falling bottom cube
             UpdateDetachedCube(dt);
         }
 
-        // 3. Physics
         ClearForces();
         ApplyGravity();
         IntegrateMotion(dt);
 
-        // 4. Enforce rigid constraints
         for (int i = 0; i < constraintSolverIterations; i++)
         {
             EnforceRigidConstraints();
         }
 
-        // 5. Update bottom cube position if still attached
         if (bottomCubeAttached && bottomCube != null && links.Count > 0)
         {
             bottomCube.transform.position = links[links.Count - 1].position.ToUnityVec3();
@@ -183,7 +175,6 @@ public class ChainPhysicsSystem : MonoBehaviour
 
     void CheckForAutoDetach()
     {
-        // Check if chain is overstretched
         float maxStretch = 0f;
 
         foreach (var constraint in constraints)
@@ -193,7 +184,6 @@ public class ChainPhysicsSystem : MonoBehaviour
             maxStretch = Mathf.Max(maxStretch, stretch);
         }
 
-        // Auto-detach if overstretched
         if (maxStretch > maxStretchBeforeDetach)
         {
             DetachBottomCubeWithEnergy();
@@ -206,37 +196,29 @@ public class ChainPhysicsSystem : MonoBehaviour
 
         Debug.Log("=== ENERGIZED DETACHMENT ===");
 
-        // Calculate total stored energy (E = 0.5 * K * x^2 from paper)
         float totalEnergy = CalculateStoredEnergy();
 
         Debug.Log($"Total stored energy: {totalEnergy:F2} J");
 
-        // Split energy between cube and chain
-        float cubeEnergy = totalEnergy * cubeEnergyRatio * alpha;  // Apply alpha to cube energy
-        float chainEnergy = totalEnergy * (1.0f - cubeEnergyRatio) * alpha; // Apply alpha to chain energy
+        float cubeEnergy = totalEnergy * cubeEnergyRatio * alpha;
+        float chainEnergy = totalEnergy * (1.0f - cubeEnergyRatio) * alpha;
 
-        // Get direction from last link to bottom cube
         Vec3 detachDirection = (Vec3.FromUnityVec3(bottomCube.transform.position) - links[links.Count - 1].position).Normalized();
 
-        // Calculate cube impulse: mu = sqrt(2 * E / m) from paper
         float cubeMass = linkMass * 2.0f;
         float cubeImpulseMag = Mathf.Sqrt(2.0f * cubeEnergy / cubeMass);
 
-        // Apply impulse to cube
         bottomCubeVelocity = detachDirection * cubeImpulseMag;
 
         Debug.Log($"Cube launched with impulse: {cubeImpulseMag:F2} m/s");
 
-        // Apply snap-back to chain
         ApplySnapBackToChain(chainEnergy);
 
-        // Change cube color to show it's detached
         if (bottomCube != null)
         {
             bottomCube.GetComponent<Renderer>().material.color = detachedColor;
         }
 
-        // Detach
         bottomCubeAttached = false;
     }
 
@@ -244,7 +226,6 @@ public class ChainPhysicsSystem : MonoBehaviour
     {
         float totalEnergy = 0f;
 
-        // Energy from constraint deformation: E = 0.5 * K * x^2 (from paper)
         foreach (var constraint in constraints)
         {
             float stretch = constraint.GetStretch();
@@ -252,7 +233,6 @@ public class ChainPhysicsSystem : MonoBehaviour
             totalEnergy += Mathf.Abs(energy);
         }
 
-        // Potential energy from displacement
         for (int i = 1; i < links.Count; i++)
         {
             float restY = chainStartHeight - (i * linkSpacing);
@@ -279,10 +259,8 @@ public class ChainPhysicsSystem : MonoBehaviour
             ChainLink link = links[i];
             float positionRatio = (float)i / (links.Count - 1);
 
-            // Upward snap (stronger at bottom where detachment occurred)
             Vec3 upwardImpulse = Vec3.Up * impulsePerLink * (1.5f - positionRatio * 0.5f);
 
-            // Wave motion for realism
             float wavePhase = positionRatio * Mathf.PI;
             Vec3 waveImpulse = new Vec3(
                 Mathf.Sin(wavePhase * 3.0f) * impulsePerLink * 0.4f,
@@ -391,7 +369,6 @@ public class ChainPhysicsSystem : MonoBehaviour
     {
         float moveAmount = cubeSpeed * Time.deltaTime;
 
-        // Top cube
         if (topCube != null)
         {
             if (Input.GetKey(KeyCode.UpArrow))
@@ -404,7 +381,6 @@ public class ChainPhysicsSystem : MonoBehaviour
                 topCube.transform.position += Vector3.right * moveAmount * 0.3f;
         }
 
-        // Bottom cube - only if attached
         if (bottomCube != null && bottomCubeAttached)
         {
             if (Input.GetKey(KeyCode.W))
@@ -417,13 +393,11 @@ public class ChainPhysicsSystem : MonoBehaviour
                 bottomCube.transform.position += Vector3.right * moveAmount;
         }
 
-        // SPACE - manual detach
         if (Input.GetKeyDown(KeyCode.Space) && bottomCubeAttached)
         {
             DetachBottomCubeWithEnergy();
         }
 
-        // R - reset
         if (Input.GetKeyDown(KeyCode.R))
         {
             InitializeChain();
@@ -439,19 +413,17 @@ public class ChainPhysicsSystem : MonoBehaviour
         {
             Gizmos.DrawWireCube(link.position.ToUnityVec3(), Vector3.one * link.size);
         }
-
-        // Draw constraints with color based on stretch
         foreach (var constraint in constraints)
         {
             float currentLength = (constraint.linkB.position - constraint.linkA.position).Magnitude();
             float stretch = (currentLength - constraint.restLength) / constraint.restLength;
 
             if (stretch < 0.05f)
-                Gizmos.color = constraintColor;      // Green - minimal stretch
+                Gizmos.color = constraintColor;
             else if (stretch < maxStretchBeforeDetach * 0.7f)
-                Gizmos.color = strainedColor;        // Yellow - moderate stretch
+                Gizmos.color = strainedColor;
             else
-                Gizmos.color = Color.red;             // Red - near breaking point
+                Gizmos.color = Color.red;
 
             Gizmos.DrawLine(
                 constraint.linkA.position.ToUnityVec3(),
@@ -471,11 +443,10 @@ public class ChainPhysicsSystem : MonoBehaviour
         if (!showDebugInfo) return;
 
         GUIStyle style = new GUIStyle();
-        style.fontSize = 24; // Increased from 13
-        style.fontStyle = FontStyle.Bold; // Made bold
+        style.fontSize = 24;
+        style.fontStyle = FontStyle.Bold;
         style.normal.textColor = Color.white;
 
-        // Calculate current values
         float maxStretch = 0f;
         float maxForce = 0f;
 
@@ -487,7 +458,6 @@ public class ChainPhysicsSystem : MonoBehaviour
                 float stretch = (currentLength - c.restLength) / c.restLength;
                 maxStretch = Mathf.Max(maxStretch, stretch);
 
-                // Calculate constraint force approximation
                 float stretchAbs = currentLength - c.restLength;
                 float force = constraintStiffness * stretchAbs;
                 maxForce = Mathf.Max(maxForce, Mathf.Abs(force));
@@ -496,9 +466,8 @@ public class ChainPhysicsSystem : MonoBehaviour
 
         float currentEnergy = bottomCubeAttached ? CalculateStoredEnergy() : 0f;
 
-        // Display parameters
         int y = 15;
-        int lineHeight = 30; // Increased spacing
+        int lineHeight = 30; 
 
         GUI.Label(new Rect(15, y, 500, lineHeight), $"Alpha (energy transfer): {alpha:F2}", style);
         y += lineHeight;
