@@ -5,36 +5,37 @@ using System.Collections.Generic;
 public class FallingFragmentingCube : MonoBehaviour
 {
     [Header("Cube Settings")]
-    public float cubeSize = 4f;
-    public int fragmentsPerAxis = 4;
-    public float mass = 10f;
+    public float cubeSize = 4f;                      // Total cube size
+    public int fragmentsPerAxis = 4;                 // Number of fragments per axis (resolution)
+    public float mass = 10f;                         // Total mass of the cube
 
     [Header("Physics Settings")]
-    public Vector3 gravity = new Vector3(0, -9.81f, 0);
-    public float dt = 0.02f;
-    public float fragmentationHeight = 5f;
+    public Vector3 gravity = new Vector3(0, -9.81f, 0);  // Gravity vector
+    public float dt = 0.02f;                         // Physics timestep
+    public float fragmentationHeight = 5f;           // Height at which the cube breaks apart
 
     [Header("Fragment Settings")]
-    public float fragmentMass = 0.1f;
-    public float fragmentBounciness = 0.15f;
-    public float fragmentRandomForce = 0.5f;
-    public float groundLevel = 0f;
-    public float restitution = 0.2f;
-    public float groundFriction = 0.7f;
+    public float fragmentMass = 0.1f;                // Mass of each fragment
+    public float fragmentBounciness = 0.15f;         // Bounciness for fragments
+    public float fragmentRandomForce = 0.5f;         // Random force after fragmentation
+    public float groundLevel = 0f;                   // Y position of the ground
+    public float restitution = 0.2f;                 // Coefficient of restitution
+    public float groundFriction = 0.7f;              // Friction on the ground
 
     [Header("Debug Visualization")]
-    public bool showCollisionDebug = true;
-    public bool showContactPoints = true;
+    public bool showCollisionDebug = true;           // Show collision lines in Scene
+    public bool showContactPoints = true;            // Show contact points on ground
 
-    private List<FragmentCube> fragments;
-    private bool isFragmented = false;
-    private Vector3 velocity = Vector3.zero;
+    private List<FragmentCube> fragments;            // List of all fragments
+    private bool isFragmented = false;               // Whether the cube has fragmented
+    private Vector3 velocity = Vector3.zero;         // Velocity before fragmentation
 
-    private float initialHeight = 10f;
-    private float currentHeight;
+    private float initialHeight = 10f;               // Start height
+    private float currentHeight;                     // Current cube height
 
     void Start()
     {
+        // Initialize fragments and hide the main cube mesh
         fragments = new List<FragmentCube>();
         CreateAllFragmentsAsCube();
 
@@ -47,21 +48,20 @@ public class FallingFragmentingCube : MonoBehaviour
 
     void Update()
     {
+        // Before and after fragmentation behavior
         if (!isFragmented)
-        {
             UpdatePreFragmentation();
-        }
         else
-        {
             UpdateFragments();
-        }
     }
 
     void UpdatePreFragmentation()
     {
+        // Apply gravity to cube as a whole
         velocity += gravity * dt;
         currentHeight += velocity.y * dt;
 
+        // Move all fragments as one solid cube
         foreach (FragmentCube frag in fragments)
         {
             Vector3 basePos = frag.initialPosition;
@@ -69,16 +69,16 @@ public class FallingFragmentingCube : MonoBehaviour
             frag.UpdateMesh();
         }
 
+        // Trigger fragmentation when cube hits threshold
         if (currentHeight <= fragmentationHeight)
-        {
             TriggerFragmentation();
-        }
     }
 
     void TriggerFragmentation()
     {
         isFragmented = true;
 
+        // Add small random velocities to each fragment
         foreach (FragmentCube fragment in fragments)
         {
             fragment.velocity = velocity + new Vector3(
@@ -91,47 +91,43 @@ public class FallingFragmentingCube : MonoBehaviour
 
     void UpdateFragments()
     {
-        // Update physics for all fragments
+        // Update each fragment’s physics
         foreach (FragmentCube fragment in fragments)
-        {
             fragment.UpdatePhysics(gravity, dt, groundLevel);
-        }
 
-        // Check collisions between fragments
+        // Check and resolve collisions between fragments
         for (int i = 0; i < fragments.Count; i++)
         {
             for (int j = i + 1; j < fragments.Count; j++)
-            {
                 CheckAndResolveCollision(fragments[i], fragments[j], restitution);
-            }
         }
 
-        // Update meshes
+        // Update all meshes for rendering
         foreach (FragmentCube fragment in fragments)
-        {
             fragment.UpdateMesh();
-        }
     }
 
     void CheckAndResolveCollision(FragmentCube a, FragmentCube b, float restitution)
     {
+        // Compute distance between two fragments
         Vector3 delta = b.position - a.position;
         float distance = delta.magnitude;
         float minDistance = (a.size + b.size) / 2f * 1.1f;
 
+        // Collision check
         if (distance < minDistance && distance > 0.001f)
         {
             Vector3 normal = delta.normalized;
             float overlap = minDistance - distance;
 
-            // Visual debug
+            // Draw debug lines
             if (showCollisionDebug)
             {
                 Debug.DrawLine(a.position, b.position, Color.red, 0.1f);
                 Debug.DrawRay(a.position, normal * a.size, Color.yellow, 0.1f);
             }
 
-            // Separate the cubes
+            // Separate cubes based on mass
             float totalMass = a.mass + b.mass;
             float moveA = overlap * (b.mass / totalMass);
             float moveB = overlap * (a.mass / totalMass);
@@ -139,27 +135,24 @@ public class FallingFragmentingCube : MonoBehaviour
             a.position -= normal * moveA;
             b.position += normal * moveB;
 
-            // Calculate relative velocity
+            // Calculate impulse
             Vector3 relativeVelocity = b.velocity - a.velocity;
             float velocityAlongNormal = Vector3.Dot(relativeVelocity, normal);
-
             if (velocityAlongNormal > 0)
                 return;
 
-            // Calculate impulse
             float impulseScalar = -(1 + restitution) * velocityAlongNormal;
             impulseScalar /= (1 / a.mass + 1 / b.mass);
-
             Vector3 impulse = impulseScalar * normal;
 
+            // Apply impulse
             a.velocity -= impulse / a.mass;
             b.velocity += impulse / b.mass;
 
-            // Contact point for torque
+            // Add rotational effects
             Vector3 contactPoint = a.position + normal * (a.size / 2f);
             Vector3 rA = contactPoint - a.position;
             Vector3 rB = contactPoint - b.position;
-
             float angularImpulse = 0.3f;
             a.angularVelocity += Vector3.Cross(rA, -impulse) * angularImpulse / a.momentOfInertia;
             b.angularVelocity += Vector3.Cross(rB, impulse) * angularImpulse / b.momentOfInertia;
@@ -168,20 +161,15 @@ public class FallingFragmentingCube : MonoBehaviour
 
     void OnDrawGizmos()
     {
+        // Draw debug cubes and contact points
         if (!Application.isPlaying || fragments == null || !isFragmented)
             return;
 
         foreach (var fragment in fragments)
         {
-            if (fragment.isAtRest)
-            {
-                Gizmos.color = Color.green;
-            }
-            else
-            {
-                Gizmos.color = fragment.isGrounded ? Color.yellow : Color.cyan;
-            }
-            
+            Gizmos.color = fragment.isAtRest ? Color.green :
+                (fragment.isGrounded ? Color.yellow : Color.cyan);
+
             Gizmos.DrawWireCube(fragment.position, Vector3.one * fragment.size);
 
             if (showContactPoints && fragment.isGrounded)
@@ -195,6 +183,7 @@ public class FallingFragmentingCube : MonoBehaviour
 
     void CreateAllFragmentsAsCube()
     {
+        // Divide the cube into small fragments
         float fragmentSize = cubeSize / fragmentsPerAxis;
         float offset = (cubeSize - fragmentSize) / 2f;
 
@@ -210,6 +199,7 @@ public class FallingFragmentingCube : MonoBehaviour
                         -offset + z * fragmentSize
                     );
 
+                    // Create and initialize each fragment
                     FragmentCube fragment = new FragmentCube();
                     fragment.Initialize(fragmentBasePos + new Vector3(0, initialHeight, 0), fragmentSize, fragmentMass, GetRandomColor(), groundLevel, fragmentBounciness);
                     fragment.velocity = Vector3.zero;
@@ -224,6 +214,7 @@ public class FallingFragmentingCube : MonoBehaviour
 
     void CreateFragmentGameObject(FragmentCube fragment, int index)
     {
+        // Create fragment GameObject and attach mesh
         GameObject fragmentGO = new GameObject($"Fragment_{index}");
         fragmentGO.transform.parent = transform;
 
@@ -240,6 +231,7 @@ public class FallingFragmentingCube : MonoBehaviour
 
     Color GetRandomColor()
     {
+        // Random pastel-like color
         return new Color(
             Random.Range(0.5f, 1f),
             Random.Range(0.2f, 0.8f),
@@ -247,33 +239,28 @@ public class FallingFragmentingCube : MonoBehaviour
         );
     }
 }
+
+// Handles individual cube fragment physics and rendering
 public class FragmentCube
 {
     public CubeObject cube;
-    public Vector3 position;
-    public Vector3 velocity;
-    public Vector3 angularVelocity;
+    public Vector3 position, velocity, angularVelocity;
     public Matrix4x4 rotation = Matrix4x4.identity;
-    public float mass;
+    public float mass, size, momentOfInertia;
     public Mesh mesh;
     public MeshFilter meshFilter;
 
     public Vector3 initialPosition;
-    public float size;
-    public float momentOfInertia;
-
-    // Debug info
-    public bool isAtRest = false;
-    public bool isGrounded = false;
+    public bool isAtRest = false, isGrounded = false;
     public Vector3 groundContactPoint;
 
     private float bounciness = 0.15f;
     private float restTimer = 0f;
-    private int groundContactFrames = 0;
-    private float energyLossPerBounce = 0.7f; // Lose 70% energy per bounce
+    private float energyLossPerBounce = 0.7f;
 
     public void Initialize(Vector3 pos, float cubeSize, float m, Color color, float ground, float bounce)
     {
+        // Initialize fragment cube with physics and visuals
         position = pos;
         mass = m;
         size = cubeSize;
@@ -283,7 +270,7 @@ public class FragmentCube
 
         momentOfInertia = (1f / 6f) * mass * size * size;
 
-        // Small initial spin
+        // Small random spin
         angularVelocity = new Vector3(
             Random.Range(-1.5f, 1.5f),
             Random.Range(-1.5f, 1.5f),
@@ -293,24 +280,22 @@ public class FragmentCube
 
     public void UpdatePhysics(Vector3 gravity, float dt, float groundY)
     {
+        // Skip if resting
         if (isAtRest) return;
 
-        // Apply gravity
+        // Apply gravity and drag
         velocity += gravity * dt;
+        velocity -= velocity * 0.2f * dt;
 
-        // Air drag (stronger)
-        float airDrag = 0.2f;
-        velocity -= velocity * airDrag * dt;
-
-        // Move
+        // Move fragment
         position += velocity * dt;
 
-        // Compute vertices
+        // Check for ground collision
         Vector3[] worldVertices = new Vector3[8];
         for (int i = 0; i < 8; i++)
             worldVertices[i] = Math3D.MultiplyMatrixVector3(rotation, cube.vertices[i]) + position;
 
-        // Lowest vertex
+        // Find lowest vertex
         float lowestY = float.MaxValue;
         int lowestIdx = -1;
         for (int i = 0; i < 8; i++)
@@ -322,60 +307,36 @@ public class FragmentCube
             }
         }
 
+        // Ground collision and bounce logic
         if (lowestY <= groundY + 0.01f)
         {
             isGrounded = true;
-            groundContactFrames++;
-
             float penetration = groundY - lowestY;
             position.y += penetration;
 
-            // Contact
             Vector3 contactPoint = worldVertices[lowestIdx];
             contactPoint.y = groundY;
             groundContactPoint = contactPoint;
+
             Vector3 r = contactPoint - position;
-
-            // Velocity at contact
             Vector3 vContact = velocity + Vector3.Cross(angularVelocity, r);
-            float vNormal = vContact.y;
 
-            // Bounce (heavily damped)
-            if (vNormal < -0.05f)
-            {
-                velocity.y = -vNormal * bounciness * 0.3f; // strong damping
-                angularVelocity *= 0.6f;
-            }
+            // Apply bounce
+            if (vContact.y < -0.05f)
+                velocity.y = -vContact.y * bounciness * 0.3f;
             else
-            {
                 velocity.y = 0f;
-            }
 
-            // Friction (strong horizontal slowdown)
+            // Friction on ground
             Vector3 vTangent = new Vector3(vContact.x, 0, vContact.z);
             if (vTangent.magnitude > 0.01f)
-            {
-                float friction = 10f; // super strong ground friction
-                velocity -= vTangent.normalized * friction * dt;
-                angularVelocity *= 0.8f;
-            }
+                velocity -= vTangent.normalized * 10f * dt;
 
-            // Count vertices on ground
-            int verticesOnGround = 0;
-            for (int i = 0; i < 8; i++)
-                if (worldVertices[i].y <= groundY + 0.2f)
-                    verticesOnGround++;
-
-            // Damping for motion & spin
+            // Damping and rest detection
             velocity *= 0.8f;
             angularVelocity *= 0.7f;
 
-            // Rest detection
-            bool hasStableBase = verticesOnGround >= 3;
-            bool movingSlowly = velocity.magnitude < 0.05f;
-            bool rotatingSlowly = angularVelocity.magnitude < 0.1f;
-
-            if (hasStableBase && movingSlowly && rotatingSlowly)
+            if (velocity.magnitude < 0.05f && angularVelocity.magnitude < 0.1f)
             {
                 restTimer += dt;
                 if (restTimer > 0.25f)
@@ -388,41 +349,22 @@ public class FragmentCube
                 }
             }
             else
-            {
                 restTimer = 0f;
-            }
         }
         else
         {
             isGrounded = false;
-            groundContactFrames = 0;
             restTimer = 0f;
         }
 
-        // Final rotation and angular damping
-        if (!isAtRest)
-        {
-            if (angularVelocity.magnitude > 0.02f)
-            {
-                UpdateRotation(dt);
-            }
-            else
-            {
-                angularVelocity = Vector3.zero;
-            }
-
-            // Exponential angular damping
-            float angularDrag = 6f; // very strong
-            angularVelocity *= Mathf.Exp(-angularDrag * dt);
-
-            // Hard clamp to kill infinite spin
-            if (angularVelocity.magnitude < 0.02f)
-                angularVelocity = Vector3.zero;
-        }
+        // Update rotation
+        if (!isAtRest && angularVelocity.magnitude > 0.02f)
+            UpdateRotation(dt);
     }
 
     void UpdateRotation(float dt)
     {
+        // Update rotation based on angular velocity
         Matrix4x4 Omega = Matrix4x4.zero;
         Omega[0, 1] = -angularVelocity.z; Omega[0, 2] = angularVelocity.y;
         Omega[1, 0] = angularVelocity.z; Omega[1, 2] = -angularVelocity.x;
@@ -435,6 +377,7 @@ public class FragmentCube
 
     public void UpdateMesh()
     {
+        // Apply transformations to mesh vertices
         if (mesh == null || meshFilter == null) return;
 
         Vector3[] transformedVertices = new Vector3[8];
@@ -447,5 +390,3 @@ public class FragmentCube
         mesh.RecalculateNormals();
     }
 }
-
-
