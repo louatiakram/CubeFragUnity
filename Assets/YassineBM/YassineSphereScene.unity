@@ -119,6 +119,65 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &704114865
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 704114867}
+  - component: {fileID: 704114866}
+  m_Layer: 0
+  m_Name: SceneSetup
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &704114866
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 704114865}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b690a94e01d493ea930602619385af5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  fragmentsPerSphere: 50
+  sphereRadius: 1
+  fragmentSize: 0.1
+  numberOfSpheres: 3
+  spawnAreaSize: {x: 10, y: 5, z: 10}
+  spawnCenter: {x: 0, y: 5, z: 0}
+  gravity: 9.81
+  groundLevel: 0
+  fragmentMass: 0.1
+  restitution: 0.7
+  enableFragmentCollisions: 1
+  createSpringConstraints: 1
+  initialConstraintDistance: 0.3
+  applyRandomVelocity: 0
+  maxInitialVelocity: 2
+--- !u!4 &704114867
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 704114865}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1316084452
 GameObject:
   m_ObjectHideFlags: 0
@@ -267,7 +326,6 @@ GameObject:
   - component: {fileID: 1921766450}
   - component: {fileID: 1921766449}
   - component: {fileID: 1921766448}
-  - component: {fileID: 1921766451}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -378,36 +436,10 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
---- !u!114 &1921766451
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1921766447}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0b690a94e01d493ea930602619385af5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  fragmentsPerSphere: 50
-  sphereRadius: 1
-  fragmentSize: 0.1
-  numberOfSpheres: 3
-  spawnAreaSize: {x: 10, y: 5, z: 10}
-  spawnCenter: {x: 0, y: 5, z: 0}
-  gravity: 9.81
-  groundLevel: 0
-  fragmentMass: 0.1
-  restitution: 0.7
-  enableFragmentCollisions: 1
-  createSpringConstraints: 1
-  initialConstraintDistance: 0.3
-  applyRandomVelocity: 0
-  maxInitialVelocity: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 1316084455}
   - {fileID: 1921766450}
+  - {fileID: 704114867}
