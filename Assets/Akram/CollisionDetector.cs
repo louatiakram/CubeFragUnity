@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using System.Collections.Generic;
 
@@ -53,14 +54,14 @@ public class CollisionDetector : MonoBehaviour
     /// - normal: contact normal (sphere vs AABB)
     /// - hitPoint: sphere contact point
     /// - closestPoint: closest point on the AABB
-    /// - hitObstacle: Transform of the obstacle we hit (for attachment/follow)
+    /// - hitObstacle: ObstacleBounds of the obstacle we hit (for checking isGround)
     public bool CheckSphereCollision(
         Vector3 spherePos,
         float sphereRadius,
         out Vector3 normal,
         out Vector3 hitPoint,
         out Vector3 closestPoint,
-        out Transform hitObstacle)
+        out ObstacleBounds hitObstacle)
     {
         normal = Vector3.zero;
         hitPoint = Vector3.zero;
@@ -81,7 +82,7 @@ public class CollisionDetector : MonoBehaviour
                 normal = n;
                 hitPoint = p;
                 closestPoint = cp;
-                hitObstacle = a.transform;
+                hitObstacle = a.obstacle;
                 hasCollision = true;
             }
         }

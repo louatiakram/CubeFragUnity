@@ -1,3 +1,4 @@
+
 using UnityEngine;
 
 /// Attach this to any GameObject that should act as an obstacle for the plate
@@ -11,6 +12,10 @@ public class ObstacleBounds : MonoBehaviour
 
     [Tooltip("Center offset of the collision box")]
     public Vector3 boundsCenter = Vector3.zero;
+
+    [Header("=== Ground Settings ===")]
+    [Tooltip("If checked, this object is treated as ground - plate will stop falling when hitting this")]
+    public bool isGround = false;
 
     [Header("=== Debug ===")]
     public bool showGizmo = true;

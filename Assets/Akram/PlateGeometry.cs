@@ -82,6 +82,7 @@ public class PlateGeometry : MonoBehaviour
                 GameObject fragmentGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 fragmentGO.name = $"Fragment_{x}_{z}";
                 fragmentGO.transform.SetParent(parent, false);
+                fragmentGO.transform.localPosition = localCenter; // Set position directly
                 fragmentGO.transform.localScale = new Vector3(
                     cellWidth * 0.98f,
                     thickness,

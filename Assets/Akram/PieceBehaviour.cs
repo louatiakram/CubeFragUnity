@@ -1,3 +1,4 @@
+
 using UnityEngine;
 
 /// Individual fragment piece behaviour using CustomRB physics
@@ -96,6 +97,7 @@ public class PieceBehaviour : MonoBehaviour
             float targetY = max.y + halfHeight + EPS;
             rb.SetPosition(new Vector3(rb.Position.x, targetY, rb.Position.z));
             transform.position = rb.Position;
+            return; // Skip physics update when resting
         }
 
         timeAccumulator += Mathf.Min(deltaTime, 0.05f);
@@ -110,13 +112,16 @@ public class PieceBehaviour : MonoBehaviour
 
     void PhysicsStep(float dt, float gravity, CollisionDetector collisionDetector)
     {
+        // Skip physics if resting
+        if (isResting) return;
+
         rb.ApplyGravity(dt);
         Vector3 nextPos = rb.Position + rb.Velocity * dt;
 
         if (!justFractured)
         {
             Vector3 normal, hitPoint, closestPoint;
-            Transform hitObstacle;
+            ObstacleBounds hitObstacle;
             if (collisionDetector.CheckSphereCollision(nextPos, boundingRadius, out normal, out hitPoint, out closestPoint, out hitObstacle))
             {
                 ResolveCollision(ref nextPos, normal, hitPoint, hitObstacle);
@@ -131,41 +136,70 @@ public class PieceBehaviour : MonoBehaviour
         rb.SetPosition(nextPos);
     }
 
-    void ResolveCollision(ref Vector3 nextPos, Vector3 normal, Vector3 hitPoint, Transform hitObstacle)
+    void ResolveCollision(ref Vector3 nextPos, Vector3 normal, Vector3 hitPoint, ObstacleBounds hitObstacle)
     {
         float upDot = Vector3.Dot(normal, Vector3.up);
         const float EPS = 0.0005f;
         bool usedFlatSnap = false;
 
-        if (upDot > 0.7f)
+        // Check if we hit ground (only stop on objects marked as ground)
+        if (hitObstacle != null && hitObstacle.isGround && upDot > 0.7f)
         {
             Vector3 min, max;
-            hitObstacle.GetComponent<ObstacleBounds>().GetWorldAABB(out min, out max);
+            hitObstacle.GetWorldAABB(out min, out max);
             float targetY = max.y + halfHeight + EPS;
             nextPos.y = targetY;
             usedFlatSnap = true;
-            supportTransform = hitObstacle;
-            float vn = Vector3.Dot(rb.Velocity, normal);
-            rb.SetVelocity(rb.Velocity - vn * normal);
+            supportTransform = hitObstacle.transform;
+
+            // Stop all movement when landing on ground
+            rb.SetVelocity(Vector3.zero);
+            isResting = true;
+        }
+        else if (upDot > 0.7f)
+        {
+            // Hitting a horizontal surface that's NOT ground - bounce but don't stop completely
+            Vector3 min, max;
+            hitObstacle.GetWorldAABB(out min, out max);
+            float targetY = max.y + halfHeight + EPS;
+            nextPos.y = targetY;
+            usedFlatSnap = true;
+            supportTransform = hitObstacle.transform;
+
+            // Remove vertical velocity but keep horizontal movement
+            Vector3 velocity = rb.Velocity;
+            velocity.y = 0f;
+            rb.SetVelocity(velocity);
+
+            // Don't set isResting for non-ground surfaces
+            isResting = false;
         }
         else if (upDot < -0.7f)
         {
+            // Hitting ceiling - stop vertical movement
             Vector3 min, max;
-            hitObstacle.GetComponent<ObstacleBounds>().GetWorldAABB(out min, out max);
+            hitObstacle.GetWorldAABB(out min, out max);
             float targetY = min.y - halfHeight - EPS;
             nextPos.y = targetY;
             usedFlatSnap = true;
-            float vn = Vector3.Dot(rb.Velocity, normal);
-            rb.SetVelocity(rb.Velocity - vn * normal);
-        }
 
-        float normalVelocity = Vector3.Dot(rb.Velocity, normal);
-        if (!usedFlatSnap && normalVelocity < 0f)
+            // Remove vertical velocity component
+            Vector3 velocity = rb.Velocity;
+            velocity.y = Mathf.Min(velocity.y, 0f); // Only stop upward movement
+            rb.SetVelocity(velocity);
+        }
+        else
         {
-            rb.SetVelocity(rb.Velocity - (1f + RESTITUTION) * normalVelocity * normal);
+            // Hitting vertical surface - stop movement into the surface but allow sliding
+            float normalVelocity = Vector3.Dot(rb.Velocity, normal);
+            if (normalVelocity < 0f)
+            {
+                rb.SetVelocity(rb.Velocity - (1f + RESTITUTION) * normalVelocity * normal);
+            }
         }
 
-        if (usedFlatSnap && upDot > 0.7f && rb.Velocity.magnitude < REST_THRESHOLD)
+        // Only go to rest state on ground objects
+        if (usedFlatSnap && hitObstacle != null && hitObstacle.isGround && upDot > 0.7f && rb.Velocity.magnitude < REST_THRESHOLD)
         {
             isResting = true;
             rb.SetVelocity(Vector3.zero);

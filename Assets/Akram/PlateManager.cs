@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿
+using UnityEngine;
 using System.Collections.Generic;
 
 /// Main manager for the fracturing plate system
@@ -41,6 +42,7 @@ public class PlateManager : MonoBehaviour
     private List<PieceBehaviour> pieces = new List<PieceBehaviour>();
     private GameObject intactPlate;
     private bool isFractured = false;
+    private bool hasLanded = false; // New state to track if plate has landed on ground
 
     void Awake()
     {
@@ -66,14 +68,15 @@ public class PlateManager : MonoBehaviour
         if (Time.frameCount % 30 == 0)
             collisionDetector.RefreshColliders();
 
-        if (!isFractured)
+        if (!isFractured && !hasLanded)
         {
             UpdateIntactPlate();
         }
-        else
+        else if (isFractured)
         {
             UpdateFragments();
         }
+        // If hasLanded but not fractured, plate stops falling (no updates)
     }
 
     void InitializeComponents()
@@ -117,21 +120,45 @@ public class PlateManager : MonoBehaviour
         intactPlate.transform.position = platePhysics.Position;
         intactPlate.transform.rotation = Quaternion.identity;
 
-        // Aesthetic pre-fracture "defragmentation"
-        ApplyVisualDefragmentation();
-
         // Collision detection using bounding sphere
         float plateRadius = 0.5f * Mathf.Sqrt(plateWidth * plateWidth + plateDepth * plateDepth);
-        Vector3 normal, hitPoint, closestPoint; Transform _unused;
+        Vector3 normal, hitPoint, closestPoint;
+        ObstacleBounds hitObstacle;
         if (collisionDetector.CheckSphereCollision(
             platePhysics.Position,
             plateRadius,
             out normal,
             out hitPoint,
             out closestPoint,
-            out _unused))
+            out hitObstacle))
         {
-            FracturePlate(hitPoint, normal);
+            // Check if we hit ground
+            if (hitObstacle != null && hitObstacle.isGround)
+            {
+                // Stop falling - plate lands intact on ground
+                hasLanded = true;
+
+                // Position plate exactly on top of ground
+                Vector3 min, max;
+                hitObstacle.GetWorldAABB(out min, out max);
+                float groundTopY = max.y;
+                float plateBottomY = platePhysics.Position.y - plateThickness * 0.5f;
+                float offsetY = groundTopY - plateBottomY + plateThickness * 0.5f;
+
+                Vector3 landedPosition = new Vector3(
+                    platePhysics.Position.x,
+                    platePhysics.Position.y + offsetY,
+                    platePhysics.Position.z
+                );
+
+                intactPlate.transform.position = landedPosition;
+                platePhysics.Initialize(landedPosition, 0f); // Stop movement
+            }
+            else
+            {
+                // Hit non-ground obstacle - fracture normally
+                FracturePlate(hitPoint, normal);
+            }
         }
     }
 
@@ -140,29 +167,6 @@ public class PlateManager : MonoBehaviour
         foreach (var piece in pieces)
         {
             piece.PhysicsUpdate(Time.deltaTime, fallSpeed, collisionDetector);
-        }
-    }
-
-    // --- FIX: no vertical jitter (XZ-only) so pieces don't hover pre-fracture ---
-    void ApplyVisualDefragmentation()
-    {
-        float radialOffset = 0.25f * alpha;
-        float jitterAmount = 0.05f * alpha;
-
-        foreach (var piece in pieces)
-        {
-            Vector3 outward = new Vector3(
-                piece.LocalCenter.x / (plateWidth * 0.5f + 1e-6f),
-                0f,
-                piece.LocalCenter.z / (plateDepth * 0.5f + 1e-6f)
-            );
-
-            // XZ-only jitter
-            Vector2 jitter2 = Random.insideUnitCircle * jitterAmount;
-            Vector3 offset = outward * radialOffset + new Vector3(jitter2.x, 0f, jitter2.y);
-
-            piece.transform.position = platePhysics.Position + piece.LocalCenter + offset;
-            piece.transform.rotation = Quaternion.Euler(0f, (Random.value - 0.5f) * 20f * alpha, 0f);
         }
     }
 
