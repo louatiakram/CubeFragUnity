@@ -1,98 +1,84 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-/// Collision detection system using AABB algorithm
-/// Detects collisions with GameObjects that have ObstacleBounds component
-/// AND fragment-to-fragment collisions
+/// Unified collision detection system
+/// Handles both obstacle and fragment-to-fragment collisions
 public class CollisionDetector : MonoBehaviour
 {
-    private struct AABBRef
+    private struct ObstacleRef
     {
         public Transform transform;
-        public ObstacleBounds obstacle;
+        public ObstacleBounds bounds;
     }
 
-    private readonly List<AABBRef> obstacles = new List<AABBRef>();
+    private readonly List<ObstacleRef> obstacles = new List<ObstacleRef>();
     private List<PieceBehaviour> fragments = new List<PieceBehaviour>();
 
-    /// Refresh obstacle list from scene
-    public void RefreshColliders()
+    public void RefreshObstacles()
     {
         obstacles.Clear();
+        var allObstacles = FindObjectsOfType<ObstacleBounds>();
 
-        var all = FindObjectsOfType<ObstacleBounds>();
-        foreach (var ob in all)
+        foreach (var ob in allObstacles)
         {
-            // Skip anything under the plate root
             if (ob.transform.IsChildOf(transform) || ob.transform == transform)
                 continue;
 
-            obstacles.Add(new AABBRef { transform = ob.transform, obstacle = ob });
+            obstacles.Add(new ObstacleRef { transform = ob.transform, bounds = ob });
         }
     }
 
-    /// Register fragments for fragment-to-fragment collision
     public void RegisterFragments(List<PieceBehaviour> pieceList)
     {
         fragments = pieceList;
     }
 
-    /// Get count of detected obstacles (for debugging)
     public int GetObstacleCount() => obstacles.Count;
 
-    /// Public helper to get current AABB of a specific obstacle.
-    public void GetWorldAABB(Transform obstacleTransform, out Vector3 min, out Vector3 max)
+    public void GetObstacleAABB(Transform obstacleTransform, out Vector3 min, out Vector3 max)
     {
-        var ob = obstacleTransform.GetComponent<ObstacleBounds>();
-        if (ob != null)
+        var bounds = obstacleTransform.GetComponent<ObstacleBounds>();
+        if (bounds != null)
         {
-            ob.GetWorldAABB(out min, out max);
+            bounds.GetWorldAABB(out min, out max);
         }
         else
         {
-            // Fallback: empty box at transform position
             min = max = obstacleTransform.position;
         }
     }
 
-    /// Check sphere collision against all AABBs (obstacles only)
-    public bool CheckSphereCollision(
+    public bool CheckObstacleCollision(
         Vector3 spherePos,
         float sphereRadius,
         out Vector3 normal,
         out Vector3 hitPoint,
-        out Vector3 closestPoint,
         out ObstacleBounds hitObstacle)
     {
         normal = Vector3.zero;
         hitPoint = Vector3.zero;
-        closestPoint = Vector3.zero;
         hitObstacle = null;
 
-        bool hasCollision = false;
-
-        foreach (var a in obstacles)
+        foreach (var obs in obstacles)
         {
             Vector3 min, max;
-            a.obstacle.GetWorldAABB(out min, out max);
+            obs.bounds.GetWorldAABB(out min, out max);
 
-            Vector3 n, p, cp;
-            if (CheckSphereAABB(spherePos, sphereRadius, min, max, out n, out p, out cp))
+            Vector3 n, p;
+            if (SphereAABBTest(spherePos, sphereRadius, min, max, out n, out p))
             {
                 normal = n;
                 hitPoint = p;
-                closestPoint = cp;
-                hitObstacle = a.obstacle;
-                hasCollision = true;
+                hitObstacle = obs.bounds;
+                return true;
             }
         }
 
-        return hasCollision;
+        return false;
     }
 
-    /// Check fragment-to-fragment collision
     public bool CheckFragmentCollision(
-        PieceBehaviour checkingFragment,
+        PieceBehaviour self,
         Vector3 spherePos,
         float sphereRadius,
         out Vector3 normal,
@@ -103,46 +89,40 @@ public class CollisionDetector : MonoBehaviour
         hitPoint = Vector3.zero;
         relativeVelocity = Vector3.zero;
 
-        bool hasCollision = false;
-
         foreach (var other in fragments)
         {
-            if (other == checkingFragment || other == null || !other.gameObject.activeInHierarchy)
+            if (other == self || other == null || !other.gameObject.activeInHierarchy)
                 continue;
 
             Vector3 otherPos = other.transform.position;
-            float otherRadius = other.GetBoundingRadius();
+            float otherRadius = other.BoundingRadius;
+            float radiusSum = sphereRadius + otherRadius;
 
-            // Sphere-sphere collision check
             Vector3 diff = spherePos - otherPos;
             float distSq = diff.sqrMagnitude;
-            float radiusSum = sphereRadius + otherRadius;
 
             if (distSq < radiusSum * radiusSum && distSq > 1e-6f)
             {
                 float dist = Mathf.Sqrt(distSq);
                 normal = diff / dist;
                 hitPoint = otherPos + normal * otherRadius;
-                relativeVelocity = checkingFragment.GetVelocity() - other.GetVelocity();
-                hasCollision = true;
-                break; // Only handle one collision per frame
+                relativeVelocity = self.Velocity - other.Velocity;
+                return true;
             }
         }
 
-        return hasCollision;
+        return false;
     }
 
-    /// Sphere vs AABB collision algorithm
-    private bool CheckSphereAABB(
+    private bool SphereAABBTest(
         Vector3 spherePos,
         float sphereRadius,
         Vector3 aabbMin,
         Vector3 aabbMax,
         out Vector3 normal,
-        out Vector3 hitPoint,
-        out Vector3 closestPoint)
+        out Vector3 hitPoint)
     {
-        closestPoint = new Vector3(
+        Vector3 closestPoint = new Vector3(
             Mathf.Clamp(spherePos.x, aabbMin.x, aabbMax.x),
             Mathf.Clamp(spherePos.y, aabbMin.y, aabbMax.y),
             Mathf.Clamp(spherePos.z, aabbMin.z, aabbMax.z)
@@ -154,18 +134,17 @@ public class CollisionDetector : MonoBehaviour
         if (distSq < sphereRadius * sphereRadius)
         {
             float dist = Mathf.Sqrt(Mathf.Max(distSq, 1e-10f));
+
             if (dist > 1e-6f)
             {
                 normal = diff / dist;
             }
             else
             {
+                // Sphere center inside AABB
                 Vector3 toMin = spherePos - aabbMin;
                 Vector3 toMax = aabbMax - spherePos;
-                float minDist = Mathf.Min(
-                    toMin.x, toMin.y, toMin.z,
-                    toMax.x, toMax.y, toMax.z
-                );
+                float minDist = Mathf.Min(toMin.x, toMin.y, toMin.z, toMax.x, toMax.y, toMax.z);
 
                 if (Mathf.Approximately(minDist, toMin.x)) normal = Vector3.left;
                 else if (Mathf.Approximately(minDist, toMax.x)) normal = Vector3.right;
@@ -184,16 +163,15 @@ public class CollisionDetector : MonoBehaviour
         return false;
     }
 
-    /// Draw debug gizmos for all detected obstacles
     public void DrawDebugGizmos()
     {
         Gizmos.color = new Color(0.2f, 1.0f, 0.3f, 0.6f);
-        foreach (var a in obstacles)
+        foreach (var obs in obstacles)
         {
             Vector3 min, max;
-            a.obstacle.GetWorldAABB(out min, out max);
-            var center = (min + max) * 0.5f;
-            var size = max - min;
+            obs.bounds.GetWorldAABB(out min, out max);
+            Vector3 center = (min + max) * 0.5f;
+            Vector3 size = max - min;
             Gizmos.DrawWireCube(center, size);
         }
     }

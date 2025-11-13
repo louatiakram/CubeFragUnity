@@ -1,9 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-/// Handles geometry generation for the plate and fragments
-/// Manages grid subdivision and mesh creation
-/// Updated to pass dimension information for inertia calculations
+/// Handles geometry generation for plate and fragments
+/// Creates meshes and initializes fragment pieces
 public class PlateGeometry : MonoBehaviour
 {
     private float width;
@@ -19,7 +18,6 @@ public class PlateGeometry : MonoBehaviour
         gridResolution = grid;
     }
 
-    /// Creates the mesh for the intact plate
     public Mesh CreatePlateMesh()
     {
         Vector3 halfSize = new Vector3(width * 0.5f, thickness * 0.5f, depth * 0.5f);
@@ -53,13 +51,14 @@ public class PlateGeometry : MonoBehaviour
         return mesh;
     }
 
-    /// Creates grid of fragment pieces
     public List<PieceBehaviour> CreateFragments(Transform parent, Material material, Vector3 startPos)
     {
         List<PieceBehaviour> fragments = new List<PieceBehaviour>();
 
         float cellWidth = width / gridResolution;
         float cellDepth = depth / gridResolution;
+        float totalVolume = width * depth * thickness;
+        float cellVolume = cellWidth * cellDepth * thickness;
 
         Vector3 gridOrigin = new Vector3(
             -width * 0.5f + cellWidth * 0.5f,
@@ -67,32 +66,21 @@ public class PlateGeometry : MonoBehaviour
             -depth * 0.5f + cellDepth * 0.5f
         );
 
-        float totalVolume = width * depth * thickness;
-        float cellVolume = cellWidth * cellDepth * thickness;
-
         for (int z = 0; z < gridResolution; z++)
         {
             for (int x = 0; x < gridResolution; x++)
             {
-                Vector3 localCenter = gridOrigin + new Vector3(
-                    x * cellWidth,
-                    0f,
-                    z * cellDepth
-                );
+                Vector3 localCenter = gridOrigin + new Vector3(x * cellWidth, 0f, z * cellDepth);
 
                 GameObject fragmentGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 fragmentGO.name = $"Fragment_{x}_{z}";
                 fragmentGO.transform.SetParent(parent, false);
                 fragmentGO.transform.localPosition = localCenter;
 
-                Vector3 scale = new Vector3(
-                    cellWidth * 0.98f,
-                    thickness,
-                    cellDepth * 0.98f
-                );
+                Vector3 scale = new Vector3(cellWidth * 0.98f, thickness, cellDepth * 0.98f);
                 fragmentGO.transform.localScale = scale;
 
-                // Remove Unity collider (we use custom collision detection)
+                // Remove Unity collider
                 var col = fragmentGO.GetComponent<Collider>();
                 if (col) DestroyImmediate(col);
 
@@ -100,13 +88,13 @@ public class PlateGeometry : MonoBehaviour
                 var mr = fragmentGO.GetComponent<MeshRenderer>();
                 mr.sharedMaterial = material;
 
-                // Add custom behaviour with dimension information
+                // Add custom physics
                 var piece = fragmentGO.AddComponent<PieceBehaviour>();
                 piece.SetupGeometry(
                     localCenter,
                     cellVolume / Mathf.Max(totalVolume, 1e-6f),
                     CalculateBoundingRadius(cellWidth, thickness, cellDepth),
-                    scale // Pass dimensions for inertia calculation
+                    scale
                 );
 
                 fragments.Add(piece);
@@ -116,7 +104,7 @@ public class PlateGeometry : MonoBehaviour
         return fragments;
     }
 
-    float CalculateBoundingRadius(float w, float h, float d)
+    private float CalculateBoundingRadius(float w, float h, float d)
     {
         return 0.5f * Mathf.Sqrt(w * w + h * h + d * d);
     }

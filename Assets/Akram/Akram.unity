@@ -150,14 +150,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98699201aaee99e4d81a5498f9573c95, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  alpha: 0.1
+  alpha: 0
   fallSpeed: 6
   enableFragmentRotation: 1
-  fragmentAngularVelocity: 0.5
-  gridResolution: 16
+  fragmentAngularVelocity: 1
+  gridResolution: 14
   plateWidth: 6
   plateDepth: 6
-  plateThickness: 0.05
+  plateThickness: 0.06
   startPosition: {x: 0, y: 14, z: 0}
   startRotation: {x: 0, y: 0, z: 0}
   impactRadius: 1

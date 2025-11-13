@@ -1,17 +1,14 @@
 using UnityEngine;
 
-/// Manages physics simulation for the intact plate
-/// Handles position, velocity, rotation, and angular velocity
-/// Implements rotational dynamics without Unity Rigidbody
+/// Physics simulation for intact plate
+/// Handles constant velocity falling with optional rotation
 public class PlatePhysics : MonoBehaviour
 {
     private Vector3 position;
     private Vector3 velocity;
-    private float fallSpeed;
-
-    // Rotation state
     private Quaternion rotation;
-    private Vector3 angularVelocity; // degrees per second
+    private Vector3 angularVelocity;
+    private float fallSpeed;
 
     public Vector3 Position => position;
     public Vector3 Velocity => velocity;
@@ -27,29 +24,21 @@ public class PlatePhysics : MonoBehaviour
         angularVelocity = angVel;
     }
 
-    /// Update physics for intact plate (falling motion with rotation)
     public void UpdateIntact(float deltaTime)
     {
-        // Linear motion - constant downward velocity
+        // Constant downward velocity
         velocity = Vector3.down * fallSpeed;
         position += velocity * deltaTime;
 
-        // Rotational motion - integrate angular velocity
+        // Integrate rotation if any angular velocity
         if (angularVelocity.sqrMagnitude > 0.001f)
         {
-            // Convert angular velocity from degrees/sec to radians/sec
             Vector3 angularVelocityRad = angularVelocity * Mathf.Deg2Rad;
-
-            // Calculate rotation axis and angle
             float angle = angularVelocityRad.magnitude * deltaTime;
             Vector3 axis = angularVelocityRad.normalized;
-
-            // Create incremental rotation quaternion
             Quaternion deltaRotation = Quaternion.AngleAxis(angle * Mathf.Rad2Deg, axis);
-
-            // Apply rotation
             rotation = deltaRotation * rotation;
-            rotation.Normalize(); // Prevent drift
+            rotation.Normalize();
         }
     }
 }

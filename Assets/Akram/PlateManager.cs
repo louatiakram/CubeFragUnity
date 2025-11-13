@@ -1,22 +1,22 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
-/// Main manager for the fracturing plate system
-/// Alpha now controls visual pre-separation of fragments before impact
+/// Main controller for the plate fracture simulation
+/// Manages intact plate falling and fracture into physics-simulated fragments
 public class PlateManager : MonoBehaviour
 {
     [Header("=== Visual Parameters ===")]
-    [Tooltip("α controls pre-separation look and scatter strength after impact")]
+    [Tooltip("Controls pre-fracture separation and post-fracture scatter strength")]
     [Range(0f, 1.5f)] public float alpha = 0.8f;
 
     [Header("=== Physics Parameters ===")]
-    [Tooltip("Downward velocity (m/s)")]
+    [Tooltip("Downward fall velocity (m/s)")]
     public float fallSpeed = 8f;
 
     [Header("=== Rotation Parameters ===")]
-    [Tooltip("Fragments rotate only after fracture (intact plate falls straight)")]
+    [Tooltip("Enable fragment rotation after fracture")]
     public bool enableFragmentRotation = true;
-    [Tooltip("Controls angular velocity for fragment rotation (0=no rotation, 1=full speed)")]
+    [Tooltip("Angular velocity multiplier for fragments")]
     [Range(0f, 2f)] public float fragmentAngularVelocity = 0.8f;
 
     [Header("=== Plate Geometry ===")]
@@ -29,12 +29,12 @@ public class PlateManager : MonoBehaviour
     public Vector3 startPosition = new Vector3(0, 8f, 0);
     public Vector3 startRotation = Vector3.zero;
 
-    [Header("=== Fracture Physics ===")]
-    [Tooltip("Radius around impact point that affects fragments (in world units)")]
+    [Header("=== Fracture Settings ===")]
+    [Tooltip("Impact radius affecting fragments")]
     [Range(1f, 10f)] public float impactRadius = 3f;
     [Tooltip("Base impulse strength on fracture")]
     [Range(5f, 25f)] public float impulseStrength = 12f;
-    [Tooltip("Torque multiplier applied to fragments on impact")]
+    [Tooltip("Torque multiplier for fragment rotation")]
     [Range(0f, 10f)] public float fragmentTorqueMultiplier = 3f;
 
     [Header("=== Debug ===")]
@@ -46,7 +46,7 @@ public class PlateManager : MonoBehaviour
     private CollisionDetector collisionDetector;
 
     // State
-    private List<PieceBehaviour> pieces = new List<PieceBehaviour>();
+    private List<PieceBehaviour> fragments = new List<PieceBehaviour>();
     private GameObject intactPlate;
     private bool isFractured = false;
     private bool hasLanded = false;
@@ -60,24 +60,26 @@ public class PlateManager : MonoBehaviour
 
     void Start()
     {
-        collisionDetector.RefreshColliders();
-        collisionDetector.RegisterFragments(pieces);
+        collisionDetector.RefreshObstacles();
+        collisionDetector.RegisterFragments(fragments);
 
         if (collisionDetector.GetObstacleCount() == 0)
         {
-            Debug.LogWarning("[PlateManager] No obstacles with ObstacleBounds component found in scene!");
+            Debug.LogWarning("[PlateManager] No ObstacleBounds components found in scene!");
         }
     }
 
     void Update()
     {
+        // Periodic obstacle refresh
         if (Time.frameCount % 30 == 0)
-            collisionDetector.RefreshColliders();
+            collisionDetector.RefreshObstacles();
 
         if (!isFractured && !hasLanded)
         {
             UpdateIntactPlate();
-            ApplyAlphaVisualization();
+            if (!isFractured) // Only apply alpha visualization if not fractured
+                ApplyAlphaVisualization();
         }
         else if (isFractured)
         {
@@ -92,12 +94,7 @@ public class PlateManager : MonoBehaviour
         collisionDetector = gameObject.AddComponent<CollisionDetector>();
 
         plateGeometry.Initialize(plateWidth, plateDepth, plateThickness, gridResolution);
-        platePhysics.Initialize(
-            startPosition,
-            fallSpeed,
-            Quaternion.Euler(startRotation),
-            Vector3.zero
-        );
+        platePhysics.Initialize(startPosition, fallSpeed, Quaternion.Euler(startRotation), Vector3.zero);
     }
 
     void CreateIntactPlate()
@@ -118,20 +115,17 @@ public class PlateManager : MonoBehaviour
     void CreateFragments()
     {
         var mat = intactPlate.GetComponent<MeshRenderer>().sharedMaterial;
-        pieces = plateGeometry.CreateFragments(transform, mat, startPosition);
+        fragments = plateGeometry.CreateFragments(transform, mat, startPosition);
         SetFragmentsActive(false);
     }
 
-    /// Apply visual separation based on alpha (pre-fracture cracks)
     void ApplyAlphaVisualization()
     {
         if (alpha < 0.05f) return;
 
-        // Calculate separation scale based on alpha
-        float separationAmount = alpha * 0.05f; // Max 0.075 units separation
-
         float cellWidth = plateWidth / gridResolution;
         float cellDepth = plateDepth / gridResolution;
+        float separationAmount = alpha * 0.05f;
 
         Vector3 gridOrigin = new Vector3(
             -plateWidth * 0.5f + cellWidth * 0.5f,
@@ -144,16 +138,11 @@ public class PlateManager : MonoBehaviour
         {
             for (int x = 0; x < gridResolution; x++)
             {
-                if (index >= pieces.Count) break;
+                if (index >= fragments.Count) break;
 
                 Vector3 localCenter = gridOrigin + new Vector3(x * cellWidth, 0f, z * cellDepth);
-
-                // Push fragments away from center based on alpha
                 Vector3 offset = localCenter.normalized * separationAmount;
-
-                // Apply to fragment's local position in intact plate visualization
-                // This creates visible cracks before fracture
-                pieces[index].transform.localPosition = localCenter + offset;
+                fragments[index].transform.localPosition = localCenter + offset;
 
                 index++;
             }
@@ -163,44 +152,38 @@ public class PlateManager : MonoBehaviour
     void UpdateIntactPlate()
     {
         platePhysics.UpdateIntact(Time.deltaTime);
-
         intactPlate.transform.position = platePhysics.Position;
         intactPlate.transform.rotation = platePhysics.Rotation;
 
         float collisionRadius = Mathf.Min(plateWidth, plateDepth) * 0.35f;
-
-        Vector3 normal, hitPoint, closestPoint;
+        Vector3 normal, hitPoint;
         ObstacleBounds hitObstacle;
 
-        if (collisionDetector.CheckSphereCollision(
+        if (collisionDetector.CheckObstacleCollision(
             platePhysics.Position,
             collisionRadius,
             out normal,
             out hitPoint,
-            out closestPoint,
             out hitObstacle))
         {
             if (hitObstacle != null && hitObstacle.isGround)
             {
+                // Land intact on ground
                 hasLanded = true;
-
                 Vector3 min, max;
                 hitObstacle.GetWorldAABB(out min, out max);
-                float groundTopY = max.y;
-                float plateBottomY = platePhysics.Position.y - plateThickness * 0.5f;
-                float offsetY = groundTopY - plateBottomY + plateThickness * 0.5f;
-
-                Vector3 landedPosition = new Vector3(
+                float offsetY = max.y + plateThickness * 0.5f - (platePhysics.Position.y - plateThickness * 0.5f);
+                Vector3 landedPos = new Vector3(
                     platePhysics.Position.x,
                     platePhysics.Position.y + offsetY,
                     platePhysics.Position.z
                 );
-
-                intactPlate.transform.position = landedPosition;
-                platePhysics.Initialize(landedPosition, 0f, platePhysics.Rotation, Vector3.zero);
+                intactPlate.transform.position = landedPos;
+                platePhysics.Initialize(landedPos, 0f, platePhysics.Rotation, Vector3.zero);
             }
             else
             {
+                // Fracture on obstacle impact
                 FracturePlate(hitPoint, normal);
             }
         }
@@ -208,51 +191,46 @@ public class PlateManager : MonoBehaviour
 
     void UpdateFragments()
     {
-        foreach (var piece in pieces)
+        foreach (var fragment in fragments)
         {
-            piece.PhysicsUpdate(Time.deltaTime, fallSpeed, collisionDetector);
+            fragment.PhysicsUpdate(Time.deltaTime, collisionDetector);
         }
     }
 
     void FracturePlate(Vector3 impactPoint, Vector3 normal)
     {
         isFractured = true;
-
         intactPlate.SetActive(false);
         SetFragmentsActive(true);
 
-        // Alpha affects impulse strength (scatter effect)
-        float finalImpulseStrength = impulseStrength * (1f + alpha * 0.5f);
+        float finalImpulse = impulseStrength * (1f + alpha * 0.5f);
+        float effectiveTorque = enableFragmentRotation ? fragmentTorqueMultiplier : 0f;
+        float effectiveAngularVel = enableFragmentRotation ? fragmentAngularVelocity : 0f;
 
-        Vector3 plateAngularVelocity = enableFragmentRotation ? platePhysics.AngularVelocity : Vector3.zero;
-        float effectiveTorqueMultiplier = enableFragmentRotation ? fragmentTorqueMultiplier : 0f;
-        float effectiveAngularVelocity = enableFragmentRotation ? fragmentAngularVelocity : 0f;
-
-        foreach (var piece in pieces)
+        foreach (var fragment in fragments)
         {
-            Vector3 worldCenter = platePhysics.Position + platePhysics.Rotation * piece.LocalCenter;
+            Vector3 worldCenter = platePhysics.Position + platePhysics.Rotation * fragment.LocalCenter;
 
-            piece.Initialize(
+            fragment.Initialize(
                 worldCenter,
                 platePhysics.Velocity,
                 impactPoint,
                 normal,
-                finalImpulseStrength,
+                finalImpulse,
                 impactRadius,
-                plateAngularVelocity,
-                effectiveTorqueMultiplier,
+                effectiveTorque,
                 platePhysics.Rotation,
-                effectiveAngularVelocity
+                effectiveAngularVel
             );
         }
     }
 
     void SetFragmentsActive(bool active)
     {
-        foreach (var piece in pieces)
+        foreach (var fragment in fragments)
         {
-            if (piece != null)
-                piece.gameObject.SetActive(active);
+            if (fragment != null)
+                fragment.gameObject.SetActive(active);
         }
     }
 
@@ -261,14 +239,15 @@ public class PlateManager : MonoBehaviour
         if (!showDebugGizmos) return;
 
         Vector3 center = Application.isPlaying ? platePhysics.Position : startPosition;
+        Quaternion rotation = Application.isPlaying ? platePhysics.Rotation : Quaternion.Euler(startRotation);
 
+        // Plate bounds
         Gizmos.color = Color.yellow;
-        Gizmos.matrix = Application.isPlaying ?
-            Matrix4x4.TRS(platePhysics.Position, platePhysics.Rotation, Vector3.one) :
-            Matrix4x4.TRS(startPosition, Quaternion.Euler(startRotation), Vector3.one);
+        Gizmos.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
         Gizmos.DrawWireCube(Vector3.zero, new Vector3(plateWidth, plateThickness, plateDepth));
         Gizmos.matrix = Matrix4x4.identity;
 
+        // Collision sphere
         if (Application.isPlaying)
         {
             float collisionRadius = Mathf.Min(plateWidth, plateDepth) * 0.35f;
@@ -276,6 +255,7 @@ public class PlateManager : MonoBehaviour
             Gizmos.DrawWireSphere(platePhysics.Position, collisionRadius);
         }
 
+        // Obstacles
         if (Application.isPlaying && collisionDetector != null)
         {
             collisionDetector.DrawDebugGizmos();

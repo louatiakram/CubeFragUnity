@@ -1,0 +1,67 @@
+Cube Fracture System - Quick Start Guide
+Scene Setup
+1. Required Components
+Add PlateManager component to an empty GameObject
+
+The system will automatically create necessary child objects
+
+2. Obstacle Setup
+Add ObstacleBounds component to any object you want collisions with
+
+For ground: Check "isGround" checkbox in ObstacleBounds
+
+Objects without ObstacleBounds will be ignored
+
+Key Parameters
+Cube Properties
+Grid Resolution: Number of fragments (2-32)
+
+Cube Size: Dimensions of the intact cube
+
+Start Position: Initial spawn position
+
+Physics Settings
+Fall Speed: Downward velocity
+
+Impact Radius: Fracture effect range
+
+Impulse Strength: Explosion force magnitude
+
+Rotation Controls
+Enable Fragment Rotation: Toggle rotation on/off
+
+Fragment Angular Velocity: Rotation speed (0-1)
+
+How It Works
+Intact Phase: Cube falls straight down
+
+Collision: Hits non-ground obstacle → fractures
+
+Fracture: Explodes into grid-based fragments
+
+Physics: Fragments tumble and collide with environment
+
+Resting: Fragments stop when velocity drops below threshold
+
+Important Notes
+No Unity Colliders needed on fragments
+
+ObstacleBounds uses mesh bounds or custom AABB
+
+Ground objects stop falling, others trigger fracture
+
+Performance: Higher grid resolution = more fragments
+
+Troubleshooting
+No fractures? Check ObstacleBounds on obstacles
+
+Fragments phasing through objects? Increase collision radius
+
+Too much/too little rotation? Adjust angular velocity parameter
+
+Debug Visualization
+Enable Show Debug Gizmos to see collision spheres and AABB bounds
+
+Red sphere: Actual collision zone
+
+Green wireframes: Detected obstacles
