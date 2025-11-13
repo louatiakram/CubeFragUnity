@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 /// Handles geometry generation for the plate and fragments
 /// Manages grid subdivision and mesh creation
+/// Updated to pass dimension information for inertia calculations
 public class PlateGeometry : MonoBehaviour
 {
     private float width;
@@ -82,14 +83,16 @@ public class PlateGeometry : MonoBehaviour
                 GameObject fragmentGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 fragmentGO.name = $"Fragment_{x}_{z}";
                 fragmentGO.transform.SetParent(parent, false);
-                fragmentGO.transform.localPosition = localCenter; // Set position directly
-                fragmentGO.transform.localScale = new Vector3(
+                fragmentGO.transform.localPosition = localCenter;
+
+                Vector3 scale = new Vector3(
                     cellWidth * 0.98f,
                     thickness,
                     cellDepth * 0.98f
                 );
+                fragmentGO.transform.localScale = scale;
 
-                // Remove Unity collider (we use custom collision)
+                // Remove Unity collider (we use custom collision detection)
                 var col = fragmentGO.GetComponent<Collider>();
                 if (col) DestroyImmediate(col);
 
@@ -97,12 +100,13 @@ public class PlateGeometry : MonoBehaviour
                 var mr = fragmentGO.GetComponent<MeshRenderer>();
                 mr.sharedMaterial = material;
 
-                // Add custom behaviour
+                // Add custom behaviour with dimension information
                 var piece = fragmentGO.AddComponent<PieceBehaviour>();
                 piece.SetupGeometry(
                     localCenter,
                     cellVolume / Mathf.Max(totalVolume, 1e-6f),
-                    CalculateBoundingRadius(cellWidth, thickness, cellDepth)
+                    CalculateBoundingRadius(cellWidth, thickness, cellDepth),
+                    scale // Pass dimensions for inertia calculation
                 );
 
                 fragments.Add(piece);

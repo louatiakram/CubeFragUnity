@@ -1,4 +1,3 @@
-
 using UnityEngine;
 
 /// Attach this to any GameObject that should act as an obstacle for the plate
