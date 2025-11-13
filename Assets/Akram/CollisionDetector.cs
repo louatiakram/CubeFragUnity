@@ -3,119 +3,131 @@ using System.Collections.Generic;
 
 /// Collision detection system using AABB algorithm
 /// Detects collisions with GameObjects that have ObstacleBounds component
-/// Provides precise, manually-defined collision bounds
+/// Computes AABBs dynamically so moving obstacles are always up to date.
 public class CollisionDetector : MonoBehaviour
 {
-    private struct AABBData
+    private struct AABBRef
     {
         public Transform transform;
-        public Vector3 min; // AABB minimum corner (world space)
-        public Vector3 max; // AABB maximum corner (world space)
-        public Vector3 center;
+        public ObstacleBounds obstacle;
     }
 
-    private List<AABBData> aabbs = new List<AABBData>();
+    private readonly List<AABBRef> obstacles = new List<AABBRef>();
 
-    /// Refresh AABB cache from scene (finds all ObstacleBounds components)
+    /// Refresh obstacle list from scene (no min/max caching)
     public void RefreshColliders()
     {
-        aabbs.Clear();
+        obstacles.Clear();
 
-        // Find ALL GameObjects with ObstacleBounds component
-        var allObstacles = FindObjectsOfType<ObstacleBounds>();
-        foreach (var obstacle in allObstacles)
+        var all = FindObjectsOfType<ObstacleBounds>();
+        foreach (var ob in all)
         {
-            // Skip if this is part of our plate system
-            if (obstacle.transform.IsChildOf(transform) ||
-                obstacle.transform == transform)
+            // Skip anything under the plate root
+            if (ob.transform.IsChildOf(transform) || ob.transform == transform)
                 continue;
 
-            AddAABB(obstacle);
+            obstacles.Add(new AABBRef { transform = ob.transform, obstacle = ob });
         }
     }
 
-    void AddAABB(ObstacleBounds obstacle)
-    {
-        Vector3 min, max;
-        obstacle.GetWorldAABB(out min, out max);
-
-        aabbs.Add(new AABBData
-        {
-            transform = obstacle.transform,
-            center = (min + max) * 0.5f,
-            min = min,
-            max = max
-        });
-    }
-
     /// Get count of detected obstacles (for debugging)
-    public int GetObstacleCount()
+    public int GetObstacleCount() => obstacles.Count;
+
+    /// Public helper to get current AABB of a specific obstacle.
+    public void GetWorldAABB(Transform obstacleTransform, out Vector3 min, out Vector3 max)
     {
-        return aabbs.Count;
+        var ob = obstacleTransform.GetComponent<ObstacleBounds>();
+        if (ob != null)
+        {
+            ob.GetWorldAABB(out min, out max);
+        }
+        else
+        {
+            // Fallback: empty box at transform position
+            min = max = obstacleTransform.position;
+        }
     }
 
-    /// Check sphere collision against all AABBs using AABB algorithm
-    /// Returns true if collision detected, outputs normal, hit point (sphere contact) and the closest AABB point.
-    public bool CheckSphereCollision(Vector3 spherePos, float sphereRadius,
-        out Vector3 normal, out Vector3 hitPoint, out Vector3 closestPoint)
+    /// Check sphere collision against all AABBs (computed on demand).
+    /// Returns true if collision detected and provides:
+    /// - normal: contact normal (sphere vs AABB)
+    /// - hitPoint: sphere contact point
+    /// - closestPoint: closest point on the AABB
+    /// - hitObstacle: Transform of the obstacle we hit (for attachment/follow)
+    public bool CheckSphereCollision(
+        Vector3 spherePos,
+        float sphereRadius,
+        out Vector3 normal,
+        out Vector3 hitPoint,
+        out Vector3 closestPoint,
+        out Transform hitObstacle)
     {
         normal = Vector3.zero;
         hitPoint = Vector3.zero;
         closestPoint = Vector3.zero;
+        hitObstacle = null;
 
         bool hasCollision = false;
 
-        foreach (var aabb in aabbs)
+        foreach (var a in obstacles)
         {
+            Vector3 min, max;
+            a.obstacle.GetWorldAABB(out min, out max);
+
             Vector3 n, p, cp;
-            if (CheckSphereAABB(spherePos, sphereRadius, aabb, out n, out p, out cp))
+            if (CheckSphereAABB(spherePos, sphereRadius, min, max, out n, out p, out cp))
             {
+                // (Simple strategy) keep the last hit as the current one.
                 normal = n;
                 hitPoint = p;
                 closestPoint = cp;
+                hitObstacle = a.transform;
                 hasCollision = true;
             }
         }
+
         return hasCollision;
     }
 
-    /// Sphere vs AABB (Axis-Aligned Bounding Box) collision algorithm
-    /// Classic AABB algorithm: find closest point on box to sphere center
-    bool CheckSphereAABB(Vector3 spherePos, float sphereRadius, AABBData aabb,
-        out Vector3 normal, out Vector3 hitPoint, out Vector3 closestPoint)
+    /// Sphere vs AABB (Axis-Aligned Bounding Box) collision algorithm.
+    /// Computes with provided min/max (already in world space).
+    private bool CheckSphereAABB(
+        Vector3 spherePos,
+        float sphereRadius,
+        Vector3 aabbMin,
+        Vector3 aabbMax,
+        out Vector3 normal,
+        out Vector3 hitPoint,
+        out Vector3 closestPoint)
     {
         // Find closest point on AABB to sphere center
         closestPoint = new Vector3(
-            Mathf.Clamp(spherePos.x, aabb.min.x, aabb.max.x),
-            Mathf.Clamp(spherePos.y, aabb.min.y, aabb.max.y),
-            Mathf.Clamp(spherePos.z, aabb.min.z, aabb.max.z)
+            Mathf.Clamp(spherePos.x, aabbMin.x, aabbMax.x),
+            Mathf.Clamp(spherePos.y, aabbMin.y, aabbMax.y),
+            Mathf.Clamp(spherePos.z, aabbMin.z, aabbMax.z)
         );
 
         // Calculate distance from sphere center to closest point
         Vector3 diff = spherePos - closestPoint;
         float distSq = diff.sqrMagnitude;
 
-        // Check if sphere intersects AABB
         if (distSq < sphereRadius * sphereRadius)
         {
             float dist = Mathf.Sqrt(Mathf.Max(distSq, 1e-10f));
             if (dist > 1e-6f)
             {
-                // Normal points from closest point to sphere center
                 normal = diff / dist;
             }
             else
             {
-                // Sphere center is inside AABB: calculate face normal
-                // Find which face is closest
-                Vector3 toMin = spherePos - aabb.min;
-                Vector3 toMax = aabb.max - spherePos;
+                // Sphere center inside AABB: choose nearest face normal
+                Vector3 toMin = spherePos - aabbMin;
+                Vector3 toMax = aabbMax - spherePos;
                 float minDist = Mathf.Min(
                     toMin.x, toMin.y, toMin.z,
                     toMax.x, toMax.y, toMax.z
                 );
 
-                // Set normal based on closest face
                 if (Mathf.Approximately(minDist, toMin.x)) normal = Vector3.left;
                 else if (Mathf.Approximately(minDist, toMax.x)) normal = Vector3.right;
                 else if (Mathf.Approximately(minDist, toMin.y)) normal = Vector3.down;
@@ -133,14 +145,17 @@ public class CollisionDetector : MonoBehaviour
         return false;
     }
 
-    /// Draw debug gizmos for all detected AABBs
+    /// Draw debug gizmos for all detected obstacles (dynamic AABBs)
     public void DrawDebugGizmos()
     {
         Gizmos.color = new Color(0.2f, 1.0f, 0.3f, 0.6f);
-        foreach (var aabb in aabbs)
+        foreach (var a in obstacles)
         {
-            Vector3 size = aabb.max - aabb.min;
-            Gizmos.DrawWireCube(aabb.center, size);
+            Vector3 min, max;
+            a.obstacle.GetWorldAABB(out min, out max);
+            var center = (min + max) * 0.5f;
+            var size = max - min;
+            Gizmos.DrawWireCube(center, size);
         }
     }
 }

@@ -62,7 +62,7 @@ public class PlateManager : MonoBehaviour
 
     void Update()
     {
-        // Refresh collider cache periodically
+        // Refresh obstacle list periodically (you can remove this if you manage obstacles yourself)
         if (Time.frameCount % 30 == 0)
             collisionDetector.RefreshColliders();
 
@@ -122,13 +122,14 @@ public class PlateManager : MonoBehaviour
 
         // Collision detection using bounding sphere
         float plateRadius = 0.5f * Mathf.Sqrt(plateWidth * plateWidth + plateDepth * plateDepth);
-        Vector3 normal, hitPoint, closestPoint;
+        Vector3 normal, hitPoint, closestPoint; Transform _unused;
         if (collisionDetector.CheckSphereCollision(
             platePhysics.Position,
             plateRadius,
             out normal,
             out hitPoint,
-            out closestPoint))
+            out closestPoint,
+            out _unused))
         {
             FracturePlate(hitPoint, normal);
         }
