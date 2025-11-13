@@ -1,9 +1,9 @@
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class RigidBody3DState : MonoBehaviour
+public class RigidBody3DState2 : MonoBehaviour
 {
-    public CubeObject cube;
+    public CubeObjectI cube;
     public float a = 1, b = 1, c = 1, mass = 1f;
     public Vector3 position = Vector3.zero;
     public Vector3 P = Vector3.zero; // Linear momentum
@@ -17,7 +17,7 @@ public class RigidBody3DState : MonoBehaviour
 
     void Start()
     {
-        cube = new CubeObject(a, b, c, Color.green);
+        cube = new CubeObjectI(a, b, c, Color.green);
 
         float Ixx = (1f / 12f) * mass * (b * b + c * c);
         float Iyy = (1f / 12f) * mass * (a * a + c * c);
