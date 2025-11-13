@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 /// Collision detection system using AABB algorithm
 /// Detects collisions with GameObjects that have ObstacleBounds component
-/// Computes AABBs dynamically so moving obstacles are always up to date.
+/// AND fragment-to-fragment collisions
 public class CollisionDetector : MonoBehaviour
 {
     private struct AABBRef
@@ -13,8 +13,9 @@ public class CollisionDetector : MonoBehaviour
     }
 
     private readonly List<AABBRef> obstacles = new List<AABBRef>();
+    private List<PieceBehaviour> fragments = new List<PieceBehaviour>();
 
-    /// Refresh obstacle list from scene (no min/max caching)
+    /// Refresh obstacle list from scene
     public void RefreshColliders()
     {
         obstacles.Clear();
@@ -28,6 +29,12 @@ public class CollisionDetector : MonoBehaviour
 
             obstacles.Add(new AABBRef { transform = ob.transform, obstacle = ob });
         }
+    }
+
+    /// Register fragments for fragment-to-fragment collision
+    public void RegisterFragments(List<PieceBehaviour> pieceList)
+    {
+        fragments = pieceList;
     }
 
     /// Get count of detected obstacles (for debugging)
@@ -48,12 +55,7 @@ public class CollisionDetector : MonoBehaviour
         }
     }
 
-    /// Check sphere collision against all AABBs (computed on demand).
-    /// Returns true if collision detected and provides:
-    /// - normal: contact normal (sphere vs AABB)
-    /// - hitPoint: sphere contact point
-    /// - closestPoint: closest point on the AABB
-    /// - hitObstacle: ObstacleBounds of the obstacle we hit (for checking isGround)
+    /// Check sphere collision against all AABBs (obstacles only)
     public bool CheckSphereCollision(
         Vector3 spherePos,
         float sphereRadius,
@@ -77,7 +79,6 @@ public class CollisionDetector : MonoBehaviour
             Vector3 n, p, cp;
             if (CheckSphereAABB(spherePos, sphereRadius, min, max, out n, out p, out cp))
             {
-                // (Simple strategy) keep the last hit as the current one.
                 normal = n;
                 hitPoint = p;
                 closestPoint = cp;
@@ -89,8 +90,49 @@ public class CollisionDetector : MonoBehaviour
         return hasCollision;
     }
 
-    /// Sphere vs AABB (Axis-Aligned Bounding Box) collision algorithm.
-    /// Computes with provided min/max (already in world space).
+    /// Check fragment-to-fragment collision
+    public bool CheckFragmentCollision(
+        PieceBehaviour checkingFragment,
+        Vector3 spherePos,
+        float sphereRadius,
+        out Vector3 normal,
+        out Vector3 hitPoint,
+        out Vector3 relativeVelocity)
+    {
+        normal = Vector3.zero;
+        hitPoint = Vector3.zero;
+        relativeVelocity = Vector3.zero;
+
+        bool hasCollision = false;
+
+        foreach (var other in fragments)
+        {
+            if (other == checkingFragment || other == null || !other.gameObject.activeInHierarchy)
+                continue;
+
+            Vector3 otherPos = other.transform.position;
+            float otherRadius = other.GetBoundingRadius();
+
+            // Sphere-sphere collision check
+            Vector3 diff = spherePos - otherPos;
+            float distSq = diff.sqrMagnitude;
+            float radiusSum = sphereRadius + otherRadius;
+
+            if (distSq < radiusSum * radiusSum && distSq > 1e-6f)
+            {
+                float dist = Mathf.Sqrt(distSq);
+                normal = diff / dist;
+                hitPoint = otherPos + normal * otherRadius;
+                relativeVelocity = checkingFragment.GetVelocity() - other.GetVelocity();
+                hasCollision = true;
+                break; // Only handle one collision per frame
+            }
+        }
+
+        return hasCollision;
+    }
+
+    /// Sphere vs AABB collision algorithm
     private bool CheckSphereAABB(
         Vector3 spherePos,
         float sphereRadius,
@@ -100,14 +142,12 @@ public class CollisionDetector : MonoBehaviour
         out Vector3 hitPoint,
         out Vector3 closestPoint)
     {
-        // Find closest point on AABB to sphere center
         closestPoint = new Vector3(
             Mathf.Clamp(spherePos.x, aabbMin.x, aabbMax.x),
             Mathf.Clamp(spherePos.y, aabbMin.y, aabbMax.y),
             Mathf.Clamp(spherePos.z, aabbMin.z, aabbMax.z)
         );
 
-        // Calculate distance from sphere center to closest point
         Vector3 diff = spherePos - closestPoint;
         float distSq = diff.sqrMagnitude;
 
@@ -120,7 +160,6 @@ public class CollisionDetector : MonoBehaviour
             }
             else
             {
-                // Sphere center inside AABB: choose nearest face normal
                 Vector3 toMin = spherePos - aabbMin;
                 Vector3 toMax = aabbMax - spherePos;
                 float minDist = Mathf.Min(
@@ -145,7 +184,7 @@ public class CollisionDetector : MonoBehaviour
         return false;
     }
 
-    /// Draw debug gizmos for all detected obstacles (dynamic AABBs)
+    /// Draw debug gizmos for all detected obstacles
     public void DrawDebugGizmos()
     {
         Gizmos.color = new Color(0.2f, 1.0f, 0.3f, 0.6f);
