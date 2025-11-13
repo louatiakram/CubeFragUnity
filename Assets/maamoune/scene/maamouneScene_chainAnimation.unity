@@ -170,10 +170,10 @@ MonoBehaviour:
   gravity: -9.81
   airDamping: 0.98
   constraintSolverIterations: 50
-  constraintStiffness: 1000
+  constraintStiffness: 10000
   constraintDamping: 0
   maxStretchBeforeDetach: 0.2
-  alpha: 2
+  alpha: 0
   cubeEnergyRatio: 0.4
   chainStartHeight: 5
   topCube: {fileID: 0}
