@@ -1,0 +1,4 @@
+Setup : 
+
+1 Mettre le script FallingFragmentingCube dans une empty object dans la scene 
+2 Appuier sur play
